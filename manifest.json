@@ -1,0 +1,14 @@
+// manifest.json
+{
+  "manifest_version": 3,
+  "name": "EzProxy Domain Checker",
+  "version": "1.0",
+  "permissions": ["tabs", "activeTab", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"]
+  }]
+}
