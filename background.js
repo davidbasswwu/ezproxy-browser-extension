@@ -2,7 +2,7 @@
 let DOMAIN_LIST = new Set();
 
 // URL of the remote domain list (replace with your actual hosted JSON file URL)
-const DOMAIN_LIST_URL = 'https://github.com/davidbasswwu/ezproxy-browser-extension/main/domain-list.json';
+const DOMAIN_LIST_URL = 'https://github.com/davidbasswwu/ezproxy-browser-extension/blob/main/domain-list.json';
 const UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 async function updateDomainList() {
@@ -28,7 +28,10 @@ setInterval(updateDomainList, UPDATE_INTERVAL);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete') {
     const url = new URL(tab.url);
+    console.log('URL:', url);
+
     const currentDomain = url.hostname;
+    console.log('Current domain:', currentDomain);
 
     if (DOMAIN_LIST.has(currentDomain)) {
       chrome.tabs.sendMessage(tabId, {
