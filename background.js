@@ -46,15 +46,22 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         try {
             const url = new URL(tab.url);
             const currentDomain = url.hostname;
+            console.log('Current domain:', currentDomain);
             
-            if (DOMAIN_LIST.has(currentDomain)) {
+            // Remove 'www.' if it exists
+            const domainWithoutWww = currentDomain.replace(/^www\./, '');
+            console.log('Domain without www:', domainWithoutWww);
+            
+            if (DOMAIN_LIST.has(domainWithoutWww)) {
+                console.log('Domain matches tracking list:', domainWithoutWww);
                 // Transform the domain for EZProxy
-                const transformedDomain = currentDomain.replace(/\./g, '-');
+                const transformedDomain = domainWithoutWww.replace(/\./g, '-');
+                console.log('Transformed domain for EZProxy:', transformedDomain);
                 const ezproxyUrl = `${url.protocol}//${transformedDomain}.ezproxy.library.wwu.edu${url.pathname}${url.search}${url.hash}`;
                 
                 chrome.tabs.sendMessage(tabId, {
                     type: 'DOMAIN_MATCH',
-                    domain: currentDomain,
+                    domain: domainWithoutWww,
                     originalUrl: tab.url,
                     ezproxyUrl: ezproxyUrl
                 }).catch(error => {
