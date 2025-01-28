@@ -48,9 +48,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             const currentDomain = url.hostname;
             
             if (DOMAIN_LIST.has(currentDomain)) {
+                // Transform the domain for EZProxy
+                const transformedDomain = currentDomain.replace(/\./g, '-');
+                const ezproxyUrl = `${url.protocol}//${transformedDomain}.ezproxy.library.wwu.edu${url.pathname}${url.search}${url.hash}`;
+                
                 chrome.tabs.sendMessage(tabId, {
                     type: 'DOMAIN_MATCH',
-                    domain: currentDomain
+                    domain: currentDomain,
+                    originalUrl: tab.url,
+                    ezproxyUrl: ezproxyUrl
                 }).catch(error => {
                     console.error('Error sending message to content script:', error);
                 });
