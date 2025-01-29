@@ -11,3 +11,5 @@ Here is what it looks like before:
 and after the user clicks the button:
 ![EZproxy Domain Checker Screenshot](images/chronicle-after.png)
 
+### What's Next?
+See the [TODO.md](TODO.md) file for a list of things that need to be done.
