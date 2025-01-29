@@ -1,4 +1,4 @@
-## EZproxy Domain Checker for Western Washington University
+## EZproxy browser extension for Western Washington University
 
 ### What it does 
 This Chrome browser extension makes it easy to access Library resources when the user is off-campus by checking the current domain against a list of EZproxy domains.
@@ -10,6 +10,11 @@ Here is what it looks like before:
 
 and after the user clicks the button:
 ![EZproxy Domain Checker Screenshot](images/chronicle-after.png)
+
+
+### To install
+Until this becomes available in the Chrome Extension store, use the steps for installing an unpacked Chrome extension:  https://webkul.com/blog/how-to-install-the-unpacked-extension-in-chrome/ 
+
 
 ### What's Next?
 See the [TODO.md](TODO.md) file for a list of things that need to be done.
