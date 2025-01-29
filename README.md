@@ -13,7 +13,7 @@ and after the user clicks the button:
 
 
 ### To install
-Until this becomes available in the Chrome Extension store, use the steps for installing an unpacked Chrome extension:  https://webkul.com/blog/how-to-install-the-unpacked-extension-in-chrome/ 
+Until this becomes available in the Chrome Extension store, clone the repository or download the zip file from the releases page.  Then follow the steps for installing an unpacked Chrome extension:  https://webkul.com/blog/how-to-install-the-unpacked-extension-in-chrome/ 
 
 
 ### What's Next?
