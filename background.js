@@ -2,7 +2,7 @@
 let DOMAIN_LIST = new Set();
 
 // URL of the remote domain list
-const DOMAIN_LIST_URL = 'https://raw.githubusercontent.com/davidbasswwu/ezproxy-browser-extension/main/domain-list.json';
+const DOMAIN_LIST_URL = 'https://example.com/domain-list.json';
 const UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 async function loadLocalDomainList() {
