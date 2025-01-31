@@ -1,9 +1,23 @@
 // background.js
 let DOMAIN_LIST = new Set();
+let CONFIG = {
+    domainListUrl: 'https://raw.githubusercontent.com/davidbasswwu/ezproxy-browser-extension/main/domain-list.json',
+    updateInterval: 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+};
 
-// URL of the remote domain list
-const DOMAIN_LIST_URL = 'https://example.com/domain-list.json';
-const UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+async function loadConfig() {
+    try {
+        const response = await fetch('config.json');
+        if (!response.ok) {
+            throw new Error('Failed to load configuration');
+        }
+        CONFIG = await response.json();
+        console.log('Configuration loaded successfully');
+    } catch (error) {
+        console.warn('Error loading configuration:', error);
+        console.log('Using default configuration');
+    }
+}
 
 async function loadLocalDomainList() {
     try {
@@ -21,25 +35,48 @@ async function loadLocalDomainList() {
 
 async function updateDomainList() {
     try {
-        const response = await fetch(DOMAIN_LIST_URL);
+        // Try to load from storage first
+        const stored = await chrome.storage.local.get('domainList');
+        if (stored.domainList) {
+            DOMAIN_LIST = new Set(stored.domainList);
+            console.log('Domain list loaded from storage');
+        }
+
+        // Fetch fresh list from remote
+        const response = await fetch(CONFIG.domainListUrl);
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }
         const domains = await response.json();
         DOMAIN_LIST = new Set(domains);
+        
+        // Store in local storage for offline access
+        await chrome.storage.local.set({ 
+            domainList: Array.from(DOMAIN_LIST),
+            lastUpdate: Date.now()
+        });
+        
         console.log('Domain list updated successfully');
     } catch (error) {
         console.log('Error updating remote domain list:', error);
-        console.log('Falling back to local domain list');
-        DOMAIN_LIST = await loadLocalDomainList();
+        if (DOMAIN_LIST.size === 0) {
+            console.log('Falling back to local domain list');
+            DOMAIN_LIST = await loadLocalDomainList();
+        } else {
+            console.log('Keeping existing domain list');
+        }
     }
 }
 
-// Update domain list on extension startup
-updateDomainList();
+// Initialize extension
+async function initialize() {
+    await loadConfig();
+    await updateDomainList();
+    // Schedule periodic updates
+    setInterval(updateDomainList, CONFIG.updateInterval);
+}
 
-// Schedule periodic updates
-setInterval(updateDomainList, UPDATE_INTERVAL);
+initialize();
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
