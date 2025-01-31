@@ -1,7 +1,9 @@
 // background.js
 let DOMAIN_LIST = new Set();
 let CONFIG = {
-    updateInterval: 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+    // Configuration will be loaded from config.json
+    domainListUrl: null,
+    updateInterval: null
 };
 
 async function loadConfig() {
@@ -10,11 +12,21 @@ async function loadConfig() {
         if (!response.ok) {
             throw new Error('Failed to load configuration');
         }
-        CONFIG = await response.json();
+        const config = await response.json();
+        
+        // Validate configuration
+        if (!config.domainListUrl || typeof config.domainListUrl !== 'string') {
+            throw new Error('Invalid or missing domainListUrl in configuration');
+        }
+        if (!config.updateInterval || typeof config.updateInterval !== 'number' || config.updateInterval < 60000) {
+            throw new Error('Invalid updateInterval: must be a number >= 60000 (1 minute)');
+        }
+        
+        CONFIG = config;
         console.log('Configuration loaded successfully');
     } catch (error) {
-        console.warn('Error loading configuration:', error);
-        console.log('Using default configuration');
+        console.error('Error loading configuration:', error);
+        throw error; // Re-throw to prevent initialization with invalid config
     }
 }
 
@@ -69,10 +81,14 @@ async function updateDomainList() {
 
 // Initialize extension
 async function initialize() {
-    await loadConfig();
-    await updateDomainList();
-    // Schedule periodic updates
-    setInterval(updateDomainList, CONFIG.updateInterval);
+    try {
+        await loadConfig();
+        await updateDomainList();
+        // Schedule periodic updates
+        setInterval(updateDomainList, CONFIG.updateInterval);
+    } catch (error) {
+        console.error('Error initializing extension:', error);
+    }
 }
 
 initialize();

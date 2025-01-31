@@ -1,4 +1,5 @@
 {
     "domainListUrl": "https://raw.githubusercontent.com/davidbasswwu/ezproxy-browser-extension/main/domain-list.json",
+    "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
     "updateInterval": 86400000
 }
