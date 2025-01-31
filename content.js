@@ -1,4 +1,12 @@
 // content.js
+
+function hasInstitutionalAccess() {
+    const pageText = document.body.textContent || '';
+    return pageText.includes('Access provided by') && 
+           pageText.includes('Western Washington University');
+}
+
+
 function createBanner(message, ezproxyUrl) {
     // Remove existing banner if any
     const existingBanner = document.getElementById('ezproxy-banner');
@@ -81,7 +89,7 @@ function createBanner(message, ezproxyUrl) {
 }
 
 chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'DOMAIN_MATCH') {
+    if (message.type === 'DOMAIN_MATCH' && !hasInstitutionalAccess()) {
         createBanner(
             `This resource is available through WWU Libraries. Click to access via EZProxy.`,
             message.ezproxyUrl
