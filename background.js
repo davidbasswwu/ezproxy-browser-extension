@@ -1,7 +1,6 @@
 // background.js
 let DOMAIN_LIST = new Set();
 let CONFIG = {
-    domainListUrl: 'https://raw.githubusercontent.com/davidbasswwu/ezproxy-browser-extension/main/domain-list.json',
     updateInterval: 24 * 60 * 60 * 1000 // 24 hours in milliseconds
 };
 
