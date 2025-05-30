@@ -5,6 +5,9 @@ const BANNER_ID = 'ezproxy-banner';
 const STORAGE_KEY_DISMISSED = 'ezproxy-dismissed-domains';
 const STORAGE_KEY_AUTO_REDIRECT = 'ezproxy-auto-redirect';
 
+// Global variable to track if we've initialized
+let isInitialized = false;
+
 // Check if user has reduced motion preference
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -438,6 +441,83 @@ async function removeBanner() {
     if (document.activeElement && document.activeElement.closest(`#${BANNER_ID}`)) {
         document.activeElement.blur();
     }
+}
+
+/**
+ * Initialize the content script
+ */
+async function init() {
+    if (isInitialized) return;
+    
+    // Listen for storage changes to update the banner when domains are undismissed
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'local' && changes.dismissedDomains) {
+            // Remove existing banner if any
+            const banner = document.getElementById(BANNER_ID);
+            if (banner) {
+                banner.remove();
+                restorePageMargin();
+            }
+            
+            // Re-check if we should show the banner
+            const currentUrl = window.location.href;
+            checkAndShowBanner(currentUrl);
+        }
+    });
+    
+    isInitialized = true;
+}
+
+/**
+ * Check if we should show the banner for the current URL and show it if needed
+ * @param {string} url - The URL to check
+ */
+async function checkAndShowBanner(url) {
+    try {
+        // Get the current configuration
+        const config = await getConfig();
+        
+        // Check if the current URL matches any domain in the list
+        const domainList = await (await fetch(chrome.runtime.getURL('domain-list.json'))).json();
+        const currentDomain = new URL(url).hostname;
+        
+        const matchedDomain = domainList.find(domain => 
+            currentDomain === domain || currentDomain.endsWith(`.${domain}`)
+        );
+        
+        if (!matchedDomain) return;
+        
+        // Check if user has institutional access
+        if (hasInstitutionalAccess(config)) {
+            console.log('User has institutional access, skipping EZProxy notification');
+            return;
+        }
+        
+        // Check if domain was previously dismissed
+        if (await isDomainDismissed(matchedDomain)) {
+            console.log('Domain was previously dismissed, skipping notification');
+            return;
+        }
+        
+        // Create the EZProxy URL
+        const ezproxyUrl = `${config.ezproxyBaseUrl}${url}`;
+        
+        // Show the banner
+        createBanner(
+            `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`,
+            ezproxyUrl,
+            matchedDomain
+        );
+    } catch (error) {
+        console.error('Error in checkAndShowBanner:', error);
+    }
+}
+
+// Initialize when DOM is fully loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
 }
 
 // Enhanced message listener with auto-redirect support
