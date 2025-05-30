@@ -258,6 +258,24 @@ async function initialize() {
     }
 }
 
+// Message handler for content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'GET_CONFIG') {
+        if (CONFIG) {
+            sendResponse({ config: CONFIG });
+        } else {
+            loadConfig()
+                .then(() => sendResponse({ config: CONFIG }))
+                .catch(error => {
+                    console.error('Error loading config for content script:', error);
+                    sendResponse({ error: 'Failed to load configuration' });
+                });
+        }
+        return true; // Required for async response
+    }
+    return false;
+});
+
 // Start initialization
 initialize();
 

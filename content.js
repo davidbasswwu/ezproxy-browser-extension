@@ -8,12 +8,76 @@ const STORAGE_KEY_AUTO_REDIRECT = 'ezproxy-auto-redirect';
 // Check if user has reduced motion preference
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function hasInstitutionalAccess() {
+// Cache for configuration
+let configCache = null;
+/**
+ * Gets the current configuration from the background script
+ * @returns {Promise<Object>} The configuration object
+ */
+async function getConfig() {
+    // Return cached config if available
+    if (configCache) {
+        return configCache;
+    }
+    
+    try {
+        // Request configuration from background script
+        const response = await chrome.runtime.sendMessage({ type: 'GET_CONFIG' });
+        if (response && response.config) {
+            configCache = response.config;
+            return configCache;
+        }
+        throw new Error('Invalid configuration received');
+    } catch (error) {
+        console.error('Failed to load configuration:', error);
+        // Return a minimal safe default config
+        return {
+            institutionName: 'Institution',
+            accessIndicators: ['access provided by', 'authenticated via', 'logged in as'],
+            bannerMessage: 'This resource is available through your institution. Access the full content via EZProxy.'
+        };
+    }
+}
+
+/**
+ * Checks if the current page indicates institutional access
+ * @param {Object} config - The configuration object
+ * @returns {boolean} True if institutional access is detected
+ */
+function hasInstitutionalAccess(config) {
+    if (!config || !config.institutionName) {
+        console.warn('No institution name configured for access check');
+        return false;
+    }
+    
     const pageText = document.body.textContent || '';
-    return pageText.includes('Access provided by') && 
-           (pageText.includes('Western Washington University') || 
-            pageText.includes('WWU') || 
-            pageText.includes('www.wwu.edu'));
+    const institutionName = config.institutionName.toLowerCase();
+    
+    // Create a domain from the institution name as a fallback
+    const domainFromName = institutionName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.') // Replace non-alphanumeric with dots
+        .replace(/(^\.|\.$)/g, '');  // Remove leading/trailing dots
+    
+    // Check for common access indicators
+    const accessIndicators = [
+        'access provided by',
+        'authenticated via',
+        'logged in as',
+        institutionName,
+        domainFromName
+    ];
+    
+    // Add any additional indicators from config if available
+    if (Array.isArray(config.accessIndicators)) {
+        accessIndicators.push(...config.accessIndicators);
+    }
+    
+    // Check if any indicator is found in the page text
+    const normalizedPageText = pageText.toLowerCase();
+    return accessIndicators.some(indicator => 
+        indicator && normalizedPageText.includes(indicator.toLowerCase())
+    );
 }
 
 async function isDomainDismissed(domain) {
@@ -316,7 +380,9 @@ function removeBanner() {
 chrome.runtime.onMessage.addListener(async (message) => {
     if (message.type === 'DOMAIN_MATCH') {
         // Check if user has institutional access
-        if (hasInstitutionalAccess()) {
+        // Get the current configuration
+        const config = await getConfig();
+        if (hasInstitutionalAccess(config)) {
             console.log('User has institutional access, skipping EZProxy notification');
             return;
         }
