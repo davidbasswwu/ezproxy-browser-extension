@@ -3,7 +3,7 @@
   "name": "EZProxy Domain Checker",
   "version": "1.0",
   "description": "Automatically detects library resources and provides easy access via EZProxy for off-campus users",
-  "permissions": ["tabs", "activeTab", "storage", "https://*/*"],
+  "permissions": ["tabs", "activeTab", "storage", "action", "scripting", "https://*/*"],
   "host_permissions": ["https://*/*"],
   "background": {
     "service_worker": "background.js"

@@ -124,20 +124,37 @@ async function updateExtensionIcon(domain, isDismissed) {
 }
 
 async function dismissDomain(domain) {
+    console.log('Dismissing domain:', domain);
     try {
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         if (!dismissedDomains.includes(domain)) {
             dismissedDomains.push(domain);
+            console.log('Saving dismissed domains:', dismissedDomains);
             await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
             
-            // Get the current tab to update its icon
-            const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
-            if (tab && tab.id) {
+            // Get the current tab
+            const tabs = await new Promise(resolve => {
+                chrome.tabs.query({ active: true, currentWindow: true }, resolve);
+            });
+            
+            if (tabs && tabs[0] && tabs[0].id) {
+                console.log('Updating icon for tab:', tabs[0].id);
+                // Directly call the background script's updateIcon function
                 await chrome.runtime.sendMessage({
                     action: 'updateIcon',
-                    tabId: tab.id,
+                    tabId: tabs[0].id,
                     isDismissed: true
+                });
+                
+                // Also update the badge to show dismissed state
+                await chrome.action.setBadgeText({
+                    tabId: tabs[0].id,
+                    text: 'X'
+                });
+                await chrome.action.setBadgeBackgroundColor({
+                    tabId: tabs[0].id,
+                    color: '#dc3545' // Red color
                 });
             }
         }

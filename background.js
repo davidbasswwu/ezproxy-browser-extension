@@ -302,20 +302,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
 });
 
+// Test function to verify icon updates
+async function testIconUpdate() {
+    console.log('Testing icon update functionality...');
+    
+    // Try to get the current tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs && tabs[0] && tabs[0].id) {
+        const tabId = tabs[0].id;
+        console.log(`Found active tab: ${tabId}`);
+        
+        // Test setting the dismissed icon
+        try {
+            console.log('Setting dismissed icon...');
+            await updateExtensionIcon(tabId, true);
+            console.log('Dismissed icon set successfully');
+            
+            // Set a timeout to reset the icon after 3 seconds
+            setTimeout(async () => {
+                console.log('Resetting to normal icon...');
+                await updateExtensionIcon(tabId, false);
+                console.log('Normal icon restored');
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Error testing icon update:', error);
+        }
+    } else {
+        console.error('No active tab found for testing');
+    }
+}
+
 // Helper function to update the extension icon
 async function updateExtensionIcon(tabId, isDismissed) {
-    const iconType = isDismissed ? 'DISMISSED' : 'NORMAL';
+    console.log(`Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
     const iconPath = {
         '16': `images/icon${isDismissed ? '-dismissed' : ''}-16.png`,
         '48': 'images/icon-48.png',
         '128': 'images/icon-128.png'
     };
     
+    console.log('Using icon path:', iconPath);
+    
     try {
+        // First try with tab-specific icon
         await chrome.action.setIcon({
             tabId: tabId,
             path: iconPath
         });
+        console.log('Tab-specific icon update successful');
+        
+        // Also update the global icon as a fallback
+        await chrome.action.setIcon({
+            tabId: undefined, // This updates the global icon
+            path: iconPath
+        });
+        console.log('Global icon update successful');
         
         // Update the title to indicate the status
         const title = isDismissed 
@@ -326,6 +368,7 @@ async function updateExtensionIcon(tabId, isDismissed) {
             tabId: tabId,
             title: title
         });
+        console.log('Title updated to:', title);
     } catch (error) {
         console.error('Error updating icon:', error);
         throw error;
@@ -348,6 +391,9 @@ async function initialize() {
         console.log(`Scheduled domain list updates every ${CONFIG.updateInterval / 1000 / 60} minutes`);
         
         console.log('EZProxy extension initialized successfully');
+        
+        // Run the icon test
+        setTimeout(testIconUpdate, 1000);
     } catch (error) {
         console.error('Fatal error initializing extension:', error);
         // No fallback - extension requires valid configuration
