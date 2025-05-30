@@ -235,6 +235,103 @@ function debounceTabUpdate(callback, delay = 100) {
     tabUpdateTimeout = setTimeout(callback, delay);
 }
 
+// Listen for tab updates to check domain status
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.url) {
+        try {
+            // Check if the tab's URL is in the dismissed domains list
+            const url = new URL(tab.url);
+            const domain = url.hostname;
+            
+            // Get the current tab's ID
+            const currentTab = await chrome.tabs.get(tabId);
+            
+            // Check if the domain is dismissed
+            const result = await chrome.storage.local.get('ezproxy-dismissed-domains');
+            const dismissedDomains = result['ezproxy-dismissed-domains'] || [];
+            const isDismissed = dismissedDomains.some(d => 
+                domain.endsWith(d) || domain === d
+            );
+            
+            // Update the icon based on the domain's dismissal status
+            await updateExtensionIcon(tabId, isDismissed);
+        } catch (error) {
+            console.error('Error in tab update listener:', error);
+        }
+    }
+});
+
+// Listen for messages from content scripts
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'updateIcon') {
+        updateExtensionIcon(request.tabId, request.isDismissed)
+            .then(() => sendResponse({ success: true }))
+            .catch(error => {
+                console.error('Error updating icon:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+        return true; // Required for async response
+    }
+    
+    if (message.action === 'getTab') {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            sendResponse(tabs);
+        });
+        return true; // Required for async response
+    }
+    
+    if (message.action === 'getTabId') {
+        sendResponse({ tabId: sender.tab ? sender.tab.id : null });
+        return true;
+    }
+    
+    if (message.type === 'GET_CONFIG') {
+        if (CONFIG) {
+            sendResponse({ config: CONFIG });
+        } else {
+            loadConfig()
+                .then(() => sendResponse({ config: CONFIG }))
+                .catch(error => {
+                    console.error('Error loading config for content script:', error);
+                    sendResponse({ error: 'Failed to load configuration' });
+                });
+        }
+        return true; // Required for async response
+    }
+    
+    return false;
+});
+
+// Helper function to update the extension icon
+async function updateExtensionIcon(tabId, isDismissed) {
+    const iconType = isDismissed ? 'DISMISSED' : 'NORMAL';
+    const iconPath = {
+        '16': `images/icon${isDismissed ? '-dismissed' : ''}-16.png`,
+        '48': 'images/icon-48.png',
+        '128': 'images/icon-128.png'
+    };
+    
+    try {
+        await chrome.action.setIcon({
+            tabId: tabId,
+            path: iconPath
+        });
+        
+        // Update the title to indicate the status
+        const title = isDismissed 
+            ? 'EZProxy: Banner is dismissed for this domain'
+            : 'EZProxy: Click to access library resources';
+            
+        await chrome.action.setTitle({
+            tabId: tabId,
+            title: title
+        });
+    } catch (error) {
+        console.error('Error updating icon:', error);
+        throw error;
+    }
+}
+
 // Initialize extension
 async function initialize() {
     try {
@@ -257,24 +354,6 @@ async function initialize() {
         throw error;
     }
 }
-
-// Message handler for content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'GET_CONFIG') {
-        if (CONFIG) {
-            sendResponse({ config: CONFIG });
-        } else {
-            loadConfig()
-                .then(() => sendResponse({ config: CONFIG }))
-                .catch(error => {
-                    console.error('Error loading config for content script:', error);
-                    sendResponse({ error: 'Failed to load configuration' });
-                });
-        }
-        return true; // Required for async response
-    }
-    return false;
-});
 
 // Start initialization
 initialize();

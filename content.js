@@ -7,6 +7,20 @@ const STORAGE_KEYS = {
     AUTO_REDIRECT: 'ezproxy-auto-redirect'
 };
 
+// Icon paths
+const ICON_PATHS = {
+    NORMAL: {
+        '16': 'images/icon-16.png',
+        '48': 'images/icon-48.png',
+        '128': 'images/icon-128.png'
+    },
+    DISMISSED: {
+        '16': 'images/icon-dismissed-16.png',
+        '48': 'images/icon-48.png',  // Using normal icon for larger sizes
+        '128': 'images/icon-128.png'  // Using normal icon for larger sizes
+    }
+};
+
 // Global variable to track if we've initialized
 let isInitialized = false;
 
@@ -96,6 +110,19 @@ async function isDomainDismissed(domain) {
     }
 }
 
+// Update the extension icon based on domain dismissal status
+async function updateExtensionIcon(domain, isDismissed) {
+    try {
+        await chrome.runtime.sendMessage({
+            action: 'updateIcon',
+            iconType: isDismissed ? 'DISMISSED' : 'NORMAL',
+            tabId: (await chrome.runtime.sendMessage({ action: 'getTabId' })).tabId
+        });
+    } catch (error) {
+        console.error('Error updating extension icon:', error);
+    }
+}
+
 async function dismissDomain(domain) {
     try {
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
@@ -103,6 +130,16 @@ async function dismissDomain(domain) {
         if (!dismissedDomains.includes(domain)) {
             dismissedDomains.push(domain);
             await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
+            
+            // Get the current tab to update its icon
+            const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
+            if (tab && tab.id) {
+                await chrome.runtime.sendMessage({
+                    action: 'updateIcon',
+                    tabId: tab.id,
+                    isDismissed: true
+                });
+            }
         }
     } catch (error) {
         console.error('Error saving dismissed domain:', error);
@@ -476,18 +513,51 @@ async function init() {
  */
 async function checkAndShowBanner(url) {
     try {
-        // Get the current configuration
         const config = await getConfig();
+        const domainList = await getDomainList();
         
-        // Check if the current URL matches any domain in the list
-        const domainList = await (await fetch(chrome.runtime.getURL('domain-list.json'))).json();
-        const currentDomain = new URL(url).hostname;
+        // Parse the URL to get the domain
+        let domain;
+        try {
+            const urlObj = new URL(url);
+            domain = urlObj.hostname;
+        } catch (e) {
+            console.error('Invalid URL:', url);
+            return;
+        }
         
-        const matchedDomain = domainList.find(domain => 
-            currentDomain === domain || currentDomain.endsWith(`.${domain}`)
+        // Check if the domain is in our list
+        const matchedDomain = domainList.find(d => 
+            domain === d || domain.endsWith('.' + d)
         );
         
-        if (!matchedDomain) return;
+        if (!matchedDomain) {
+            // Update icon to normal state for non-library domains
+            const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
+            if (tab && tab.id) {
+                await chrome.runtime.sendMessage({
+                    action: 'updateIcon',
+                    tabId: tab.id,
+                    isDismissed: false
+                });
+            }
+            return;
+        }
+        
+        // Check if the domain is dismissed
+        const isDismissed = await isDomainDismissed(matchedDomain);
+        if (isDismissed) {
+            // Update icon to dismissed state
+            const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
+            if (tab && tab.id) {
+                await chrome.runtime.sendMessage({
+                    action: 'updateIcon',
+                    tabId: tab.id,
+                    isDismissed: true
+                });
+            }
+            return;
+        }
         
         // Check if user has institutional access
         if (hasInstitutionalAccess(config)) {

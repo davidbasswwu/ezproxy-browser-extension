@@ -13,7 +13,11 @@
     "js": ["content.js"]
   }],
   "web_accessible_resources": [{
-    "resources": ["config.json", "domain-list.json"],
+    "resources": [
+      "config.json",
+      "domain-list.json",
+      "images/icon-dismissed-16.png"
+    ],
     "matches": ["<all_urls>"]
   }],
   "icons": {

@@ -136,14 +136,21 @@ async function undismissDomain(domain) {
         // Save the updated list
         await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: updatedDomains });
         
-        // Update the UI
-        updateStatus('Banner will show again on next visit', true);
-        accessButton.disabled = true;
-        accessButton.textContent = 'Access via EZProxy';
-        
-        // Reload the current tab to show the banner
+        // Update the extension icon to show normal state
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab && tab.id) {
+            await chrome.runtime.sendMessage({
+                action: 'updateIcon',
+                tabId: tab.id,
+                isDismissed: false
+            });
+            
+            // Update the UI
+            updateStatus('Banner will show again on next visit', true);
+            accessButton.disabled = true;
+            accessButton.textContent = 'Access via EZProxy';
+            
+            // Reload the current tab to show the banner
             await chrome.tabs.reload(tab.id);
             window.close();
         }
