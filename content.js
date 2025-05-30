@@ -2,8 +2,10 @@
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
-const STORAGE_KEY_DISMISSED = 'ezproxy-dismissed-domains';
-const STORAGE_KEY_AUTO_REDIRECT = 'ezproxy-auto-redirect';
+const STORAGE_KEYS = {
+    DISMISSED_DOMAINS: 'ezproxy-dismissed-domains',
+    AUTO_REDIRECT: 'ezproxy-auto-redirect'
+};
 
 // Global variable to track if we've initialized
 let isInitialized = false;
@@ -85,8 +87,8 @@ function hasInstitutionalAccess(config) {
 
 async function isDomainDismissed(domain) {
     try {
-        const result = await chrome.storage.local.get(STORAGE_KEY_DISMISSED);
-        const dismissedDomains = result[STORAGE_KEY_DISMISSED] || [];
+        const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
+        const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         return dismissedDomains.includes(domain);
     } catch (error) {
         console.error('Error checking dismissed domains:', error);
@@ -96,11 +98,11 @@ async function isDomainDismissed(domain) {
 
 async function dismissDomain(domain) {
     try {
-        const result = await chrome.storage.local.get(STORAGE_KEY_DISMISSED);
-        const dismissedDomains = result[STORAGE_KEY_DISMISSED] || [];
+        const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
+        const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         if (!dismissedDomains.includes(domain)) {
             dismissedDomains.push(domain);
-            await chrome.storage.local.set({ [STORAGE_KEY_DISMISSED]: dismissedDomains });
+            await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
         }
     } catch (error) {
         console.error('Error saving dismissed domain:', error);

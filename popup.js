@@ -1,3 +1,9 @@
+// Constants
+const STORAGE_KEYS = {
+    DISMISSED_DOMAINS: 'ezproxy-dismissed-domains',
+    AUTO_REDIRECT: 'ezproxy-auto-redirect'
+};
+
 // Get DOM elements
 const statusDiv = document.getElementById('status');
 const accessButton = document.getElementById('accessButton');
@@ -27,7 +33,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // Check if domain is dismissed
-        const { dismissedDomains = [] } = await chrome.storage.local.get('dismissedDomains');
+        const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
+        const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         const isDismissed = dismissedDomains.some(d => 
             currentUrl.hostname.endsWith(d) || 
             currentUrl.hostname === d
@@ -52,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Handle reset dismissed domains button
 resetButton.addEventListener('click', async () => {
     try {
-        await chrome.storage.local.remove('dismissedDomains');
+        await chrome.storage.local.remove(STORAGE_KEYS.DISMISSED_DOMAINS);
         statusDiv.textContent = 'Successfully reset all dismissed domains';
         statusDiv.className = 'status active';
         resetButton.disabled = true;
@@ -119,10 +126,15 @@ async function redirectToEZProxy(url) {
 // Helper function to undismiss a domain
 async function undismissDomain(domain) {
     try {
-        const { dismissedDomains = [] } = await chrome.storage.local.get('dismissedDomains');
+        // Get the current list of dismissed domains
+        const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
+        const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
+        
+        // Remove the domain from the dismissed list
         const updatedDomains = dismissedDomains.filter(d => d !== domain);
         
-        await chrome.storage.local.set({ dismissedDomains: updatedDomains });
+        // Save the updated list
+        await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: updatedDomains });
         
         // Update the UI
         updateStatus('Banner will show again on next visit', true);
