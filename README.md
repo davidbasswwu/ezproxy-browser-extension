@@ -18,3 +18,6 @@ Until this becomes available in the Chrome Extension store, clone the repository
 
 ### What's Next?
 See the [TODO.md](TODO.md) file for a list of things that need to be done.
+
+### Credits
+Idea and initial implementation by David Bass at WWU with a lot of help from Windsurf, Claude and SWE-1.
