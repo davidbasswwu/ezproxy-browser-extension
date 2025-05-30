@@ -1,25 +1,11 @@
 // background.js
 
-// Constants
-const DEFAULT_RETRY_DELAY_MS = 2000;
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_UPDATE_INTERVAL = 86400000; // 24 hours
-const MIN_UPDATE_INTERVAL = 60000; // 1 minute
-
+// Configuration will be loaded from config.json
+let CONFIG = null;
 let DOMAIN_LIST = new Set();
-let CONFIG = {
-    // Configuration will be loaded from config.json
-    domainListUrl: null,
-    updateInterval: DEFAULT_UPDATE_INTERVAL,
-    ezproxyBaseUrl: 'ezproxy.library.wwu.edu',
-    institutionName: 'Western Washington University',
-    retryAttempts: DEFAULT_MAX_RETRIES,
-    retryDelay: DEFAULT_RETRY_DELAY_MS,
-    enableAutoRedirect: false,
-    enableUserNotifications: true,
-    bannerMessage: 'This resource is available through WWU Libraries. Access the full content via EZProxy.',
-    version: '1.0'
-};
+
+// Constants
+const MIN_UPDATE_INTERVAL = 60000; // 1 minute
 
 // Cache for transformed URLs to improve performance
 const urlTransformCache = new Map();
@@ -31,24 +17,49 @@ async function loadConfig() {
         if (!response.ok) {
             throw new Error(`Failed to load configuration: ${response.status}`);
         }
+        
         const config = await response.json();
         
-        // Validate configuration
-        if (!config.domainListUrl || typeof config.domainListUrl !== 'string') {
-            throw new Error('Invalid or missing domainListUrl in configuration');
-        }
-        if (config.updateInterval && (typeof config.updateInterval !== 'number' || config.updateInterval < MIN_UPDATE_INTERVAL)) {
-            throw new Error(`Invalid updateInterval: must be a number >= ${MIN_UPDATE_INTERVAL} (1 minute)`);
+        // Validate required fields
+        const requiredFields = [
+            'domainListUrl', 
+            'ezproxyBaseUrl', 
+            'institutionName', 
+            'bannerMessage',
+            'updateInterval',
+            'retryAttempts',
+            'retryDelay',
+            'enableAutoRedirect',
+            'enableUserNotifications'
+        ];
+        
+        const missingFields = requiredFields.filter(field => config[field] === undefined);
+        
+        if (missingFields.length > 0) {
+            throw new Error(`Missing required configuration fields: ${missingFields.join(', ')}`);
         }
         
-        CONFIG = { ...CONFIG, ...config };
-        console.log('Configuration loaded successfully:', CONFIG);
+        // Ensure updateInterval is a valid number and meets minimum requirement
+        if (typeof config.updateInterval !== 'number' || config.updateInterval < MIN_UPDATE_INTERVAL) {
+            throw new Error(`updateInterval must be a number >= ${MIN_UPDATE_INTERVAL}ms (1 minute)`);
+        }
+        
+        // Ensure retryAttempts is a valid number
+        if (typeof config.retryAttempts !== 'number' || config.retryAttempts < 0) {
+            throw new Error('retryAttempts must be a non-negative number');
+        }
+        
+        // Ensure retryDelay is a valid number
+        if (typeof config.retryDelay !== 'number' || config.retryDelay < 0) {
+            throw new Error('retryDelay must be a non-negative number');
+        }
+        
+        CONFIG = config;
+        console.log('Configuration loaded successfully');
         return true;
     } catch (error) {
         console.error('Error loading configuration:', error);
-        // Use default config for basic functionality
-        console.log('Using default configuration');
-        return false;
+        throw error; // Rethrow to prevent extension from running with invalid config
     }
 }
 
@@ -105,29 +116,26 @@ async function updateDomainList() {
         if (stored.domainList && Array.isArray(stored.domainList)) {
             DOMAIN_LIST = new Set(stored.domainList);
             console.log(`Domain list loaded from storage (${DOMAIN_LIST.size} domains)`);
-        }
-
-        // Check if we need to update based on interval
-        const now = Date.now();
-        const lastUpdate = stored.lastUpdate || 0;
-        const timeSinceUpdate = now - lastUpdate;
-        
-        if (timeSinceUpdate < CONFIG.updateInterval && DOMAIN_LIST.size > 0) {
-            console.log(`Domain list is up to date (last updated ${Math.round(timeSinceUpdate / 1000 / 60)} minutes ago)`);
-            return;
-        }
-
-        if (!CONFIG.domainListUrl) {
-            console.log('No remote domain list URL configured, using local list only');
-            if (DOMAIN_LIST.size === 0) {
-                DOMAIN_LIST = await loadLocalDomainList();
+            
+            // Check if we need to update based on interval
+            const now = Date.now();
+            const lastUpdate = stored.lastUpdate || 0;
+            const timeSinceUpdate = now - lastUpdate;
+            
+            if (timeSinceUpdate < CONFIG.updateInterval) {
+                console.log(`Domain list is up to date (last updated ${Math.round(timeSinceUpdate / 1000 / 60)} minutes ago)`);
+                return;
             }
-            return;
         }
 
-        // Fetch fresh list from remote with retry logic
-        console.log('Fetching remote domain list...');
-        const response = await fetchWithRetry(CONFIG.domainListUrl);
+        // If we get here, we need to fetch a fresh list
+        console.log('Fetching remote domain list from:', CONFIG.domainListUrl);
+        const response = await fetchWithRetry(CONFIG.domainListUrl, CONFIG.retryAttempts, CONFIG.retryDelay);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const domains = await response.json();
         
         // Validate remote domain list
@@ -135,36 +143,62 @@ async function updateDomainList() {
             throw new Error('Remote domain list is not an array');
         }
         
-        const validDomains = domains.filter(domain => typeof domain === 'string' && domain.length > 0);
+        const validDomains = domains
+            .filter(domain => typeof domain === 'string' && domain.length > 0)
+            .map(domain => domain.toLowerCase().trim())
+            .filter(domain => {
+                // Basic domain validation
+                try {
+                    new URL(domain.startsWith('http') ? domain : `https://${domain}`);
+                    return true;
+                } catch {
+                    console.warn(`Invalid domain format: ${domain}`);
+                    return false;
+                }
+            });
+            
+        if (validDomains.length === 0) {
+            throw new Error('No valid domains found in the domain list');
+        }
+        
         DOMAIN_LIST = new Set(validDomains);
         
         // Store in local storage for offline access
         await chrome.storage.local.set({ 
             domainList: Array.from(DOMAIN_LIST),
-            lastUpdate: now
+            lastUpdate: Date.now()
         });
         
         // Clear URL transform cache when domain list updates
         urlTransformCache.clear();
         
         console.log(`Domain list updated successfully (${DOMAIN_LIST.size} domains)`);
+        return true;
     } catch (error) {
-        console.error('Error updating remote domain list:', error);
+        console.error('Error updating domain list:', error);
         
-        // Show user notification for critical errors
+        // If we don't have a domain list yet, try to load the local fallback
         if (DOMAIN_LIST.size === 0) {
-            console.log('No domain list available, falling back to local list');
-            DOMAIN_LIST = await loadLocalDomainList();
-            
-            if (DOMAIN_LIST.size === 0) {
-                console.error('CRITICAL: No domain list available (local or remote)');
-                // Could show a notification to user here if needed
-            } else {
-                console.log(`Using local domain list (${DOMAIN_LIST.size} domains)`);
+            console.log('Attempting to load local domain list as fallback...');
+            try {
+                const localDomains = await loadLocalDomainList();
+                if (localDomains.size > 0) {
+                    DOMAIN_LIST = localDomains;
+                    console.log(`Loaded ${localDomains.size} domains from local fallback`);
+                    return true;
+                }
+            } catch (localError) {
+                console.error('Error loading local domain list:', localError);
             }
-        } else {
-            console.log(`Keeping existing domain list (${DOMAIN_LIST.size} domains)`);
+            
+            // If we get here, we have no domains at all
+            console.error('CRITICAL: No domain list available (local or remote)');
+            throw new Error('No domain list available. Please check your internet connection and try again.');
         }
+        
+        // If we have an existing domain list, we can continue using it
+        console.log(`Using existing domain list (${DOMAIN_LIST.size} domains)`);
+        return false;
     }
 }
 
@@ -206,25 +240,21 @@ async function initialize() {
     try {
         console.log('Initializing EZProxy extension...');
         
-        // Load configuration (continue even if it fails)
+        // Load configuration - will throw if config is invalid
         await loadConfig();
         
         // Load domain list
         await updateDomainList();
         
-        // Schedule periodic updates only if we have a valid config
-        if (CONFIG.domainListUrl && CONFIG.updateInterval) {
-            setInterval(updateDomainList, CONFIG.updateInterval);
-            console.log(`Scheduled domain list updates every ${CONFIG.updateInterval / 1000 / 60} minutes`);
-        }
+        // Schedule periodic updates
+        setInterval(updateDomainList, CONFIG.updateInterval);
+        console.log(`Scheduled domain list updates every ${CONFIG.updateInterval / 1000 / 60} minutes`);
         
         console.log('EZProxy extension initialized successfully');
     } catch (error) {
-        console.error('Error initializing extension:', error);
-        // Try to load local domain list as fallback
-        if (DOMAIN_LIST.size === 0) {
-            DOMAIN_LIST = await loadLocalDomainList();
-        }
+        console.error('Fatal error initializing extension:', error);
+        // No fallback - extension requires valid configuration
+        throw error;
     }
 }
 
