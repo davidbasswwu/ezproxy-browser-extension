@@ -1,5 +1,13 @@
 {
     "domainListUrl": "https://libweb.library.wwu.edu/ezproxy/domain-list.json",
+    "ezproxyBaseUrl": "ezproxy.library.wwu.edu",
+    "institutionName": "Western Washington University",
+    "updateInterval": 86400000,
     "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
-    "updateInterval": 86400000
+    "retryAttempts": 3,
+    "retryDelay": 2000,
+    "enableAutoRedirect": false,
+    "enableUserNotifications": true,
+    "bannerMessage": "This resource is available through WWU Libraries. Access the full content via EZProxy.",
+    "version": "1.0"
 }
