@@ -130,7 +130,18 @@ function restorePageMargin() {
     }
 }
 
-function createBanner(message, ezproxyUrl, domain) {
+/**
+ * Creates and displays a notification banner for EZProxy access
+ * @param {string} message - The message to display in the banner
+ * @param {string} ezproxyUrl - The URL to redirect to for EZProxy access
+ * @param {string} domain - The domain that was matched
+ * @returns {Promise<void>}
+ */
+async function createBanner(message, ezproxyUrl, domain) {
+    // Get the current configuration
+    const config = await getConfig();
+    const bannerConfig = config.banner || {};
+    
     // Remove existing banner if any
     const existingBanner = document.getElementById(BANNER_ID);
     if (existingBanner) {
@@ -149,31 +160,33 @@ function createBanner(message, ezproxyUrl, domain) {
         top: 0;
         left: 0;
         right: 0;
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #dee2e6;
-        padding: 12px 20px;
+        background-color: ${bannerConfig.backgroundColor || '#f8f9fa'};
+        color: ${bannerConfig.textColor || '#495057'};
+        border-bottom: 1px solid ${bannerConfig.borderColor || '#dee2e6'};
+        padding: ${bannerConfig.padding || '12px 20px'};
         display: flex;
         justify-content: space-between;
         align-items: center;
-        z-index: 2147483647;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        font-size: 14px;
-        line-height: 1.5;
+        z-index: ${bannerConfig.zIndex || '2147483647'};
+        font-family: ${bannerConfig.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'};
+        box-shadow: ${bannerConfig.boxShadow || '0 2px 4px rgba(0,0,0,0.1)'};
+        font-size: ${bannerConfig.fontSize || '14px'};
+        line-height: ${bannerConfig.lineHeight || '1.5'};
     `;
     
     // Add animation styles if motion is not reduced
     const animationStyles = prefersReducedMotion ? '' : `
         transform: translateY(-100%);
-        transition: transform 0.3s ease-out;
+        transition: transform ${bannerConfig.animationDuration || '0.3s'} ease-out;
     `;
     
     // Mobile responsive styles
+    const mobileBreakpoint = bannerConfig.mobileBreakpoint || '768px';
     const responsiveStyles = `
-        @media (max-width: 768px) {
+        @media (max-width: ${mobileBreakpoint}) {
             flex-direction: column;
             gap: 10px;
-            padding: 15px;
+            padding: 15px !important;
             text-align: center;
         }
     `;
@@ -204,11 +217,12 @@ function createBanner(message, ezproxyUrl, domain) {
         document.head.appendChild(style);
     }
 
+    // Create message div
     const messageDiv = document.createElement('div');
     messageDiv.className = 'banner-message';
     messageDiv.textContent = message;
     messageDiv.style.cssText = `
-        color: #495057;
+        color: ${bannerConfig.textColor || '#495057'};
         flex: 1;
         margin-right: 15px;
     `;
@@ -216,33 +230,45 @@ function createBanner(message, ezproxyUrl, domain) {
     const buttonsDiv = document.createElement('div');
     buttonsDiv.className = 'banner-buttons';
 
+    // Get button configurations with fallbacks
+    const buttonConfig = bannerConfig.button || {};
+    const dismissButtonConfig = bannerConfig.dismissButton || {};
+    const closeButtonConfig = bannerConfig.closeButton || {};
+
     // Main redirect button
     const redirectButton = document.createElement('button');
-    redirectButton.textContent = 'Access via EZProxy';
+    redirectButton.textContent = buttonConfig.text || 'Access via EZProxy';
     redirectButton.setAttribute('aria-label', 'Access this resource via EZProxy');
+    
+    // Apply button styles
     redirectButton.style.cssText = `
-        background-color: #0d6efd;
-        color: white;
+        background-color: ${buttonConfig.backgroundColor || '#0d6efd'};
+        color: ${buttonConfig.textColor || '#ffffff'};
         border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
+        padding: ${buttonConfig.padding || '8px 16px'};
+        border-radius: ${buttonConfig.borderRadius || '4px'};
         cursor: pointer;
-        font-size: 14px;
+        font-size: ${bannerConfig.fontSize || '14px'};
         font-weight: 500;
-        transition: background-color 0.2s ease;
+        transition: all 0.2s ease;
     `;
     
     // Add hover and focus styles
     redirectButton.addEventListener('mouseenter', () => {
-        redirectButton.style.backgroundColor = '#0b5ed7';
+        redirectButton.style.backgroundColor = buttonConfig.hoverColor || '#0b5ed7';
+        redirectButton.style.transform = 'translateY(-1px)';
     });
+    
     redirectButton.addEventListener('mouseleave', () => {
-        redirectButton.style.backgroundColor = '#0d6efd';
+        redirectButton.style.backgroundColor = buttonConfig.backgroundColor || '#0d6efd';
+        redirectButton.style.transform = '';
     });
+    
     redirectButton.addEventListener('focus', () => {
-        redirectButton.style.outline = '2px solid #0d6efd';
+        redirectButton.style.outline = `2px solid ${buttonConfig.hoverColor || '#0b5ed7'}`;
         redirectButton.style.outlineOffset = '2px';
     });
+    
     redirectButton.addEventListener('blur', () => {
         redirectButton.style.outline = '';
         redirectButton.style.outlineOffset = '';
@@ -252,77 +278,100 @@ function createBanner(message, ezproxyUrl, domain) {
         window.location.href = ezproxyUrl;
     });
 
-    // Dismiss button
+    // Dismiss button (for domain)
     const dismissButton = document.createElement('button');
-    dismissButton.textContent = 'Not now';
+    dismissButton.textContent = dismissButtonConfig.text || 'Dismiss';
     dismissButton.setAttribute('aria-label', 'Dismiss this notification');
+    
+    // Apply dismiss button styles
     dismissButton.style.cssText = `
-        background: none;
-        border: 1px solid #6c757d;
-        color: #6c757d;
+        background-color: ${dismissButtonConfig.backgroundColor || 'transparent'};
+        color: ${dismissButtonConfig.textColor || '#6c757d'};
+        border: 1px solid ${bannerConfig.borderColor || '#dee2e6'};
+        padding: ${dismissButtonConfig.padding || '6px 12px'};
+        border-radius: ${dismissButtonConfig.borderRadius || '4px'};
+        margin-right: 10px;
         cursor: pointer;
-        font-size: 14px;
-        padding: 6px 12px;
-        border-radius: 4px;
+        font-size: ${bannerConfig.fontSize || '14px'};
         transition: all 0.2s ease;
     `;
     
+    // Add hover and focus styles for dismiss button
     dismissButton.addEventListener('mouseenter', () => {
-        dismissButton.style.backgroundColor = '#6c757d';
-        dismissButton.style.color = 'white';
+        dismissButton.style.backgroundColor = dismissButtonConfig.hoverColor || '#e9ecef';
+        dismissButton.style.borderColor = bannerConfig.borderColor || '#ced4da';
+        dismissButton.style.transform = 'translateY(-1px)';
     });
+    
     dismissButton.addEventListener('mouseleave', () => {
-        dismissButton.style.backgroundColor = 'transparent';
-        dismissButton.style.color = '#6c757d';
+        dismissButton.style.backgroundColor = dismissButtonConfig.backgroundColor || 'transparent';
+        dismissButton.style.borderColor = bannerConfig.borderColor || '#dee2e6';
+        dismissButton.style.transform = '';
     });
+    
     dismissButton.addEventListener('focus', () => {
-        dismissButton.style.outline = '2px solid #6c757d';
+        dismissButton.style.outline = `2px solid ${dismissButtonConfig.hoverColor || '#6c757d'}`;
         dismissButton.style.outlineOffset = '2px';
     });
+    
     dismissButton.addEventListener('blur', () => {
         dismissButton.style.outline = '';
         dismissButton.style.outlineOffset = '';
     });
     
-    dismissButton.addEventListener('click', () => {
+    dismissButton.addEventListener('click', async () => {
+        await dismissDomain(domain);
         removeBanner();
     });
-
-    // Close button (X)
+    
+    // Close button (for current session only)
     const closeButton = document.createElement('button');
-    closeButton.textContent = '✕';
-    closeButton.setAttribute('aria-label', 'Close notification');
+    closeButton.innerHTML = closeButtonConfig.text || '&times;';
+    closeButton.setAttribute('aria-label', 'Close this notification');
+    
+    // Apply close button styles
     closeButton.style.cssText = `
-        background: none;
+        background: transparent;
         border: none;
-        color: #6c757d;
+        font-size: 20px;
+        font-weight: bold;
+        color: ${closeButtonConfig.color || '#6c757d'};
         cursor: pointer;
-        font-size: 18px;
-        padding: 0 8px;
-        margin-left: 8px;
-        border-radius: 4px;
-        transition: color 0.2s ease;
+        padding: 0 0 0 10px;
+        line-height: 1;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s ease;
     `;
     
+    // Add hover and focus styles for close button
     closeButton.addEventListener('mouseenter', () => {
-        closeButton.style.color = '#495057';
+        closeButton.style.backgroundColor = closeButtonConfig.hoverColor || '#e9ecef';
+        closeButton.style.color = closeButtonConfig.hoverColor || '#212529';
+        closeButton.style.transform = 'scale(1.1)';
     });
+    
     closeButton.addEventListener('mouseleave', () => {
-        closeButton.style.color = '#6c757d';
+        closeButton.style.backgroundColor = 'transparent';
+        closeButton.style.color = closeButtonConfig.color || '#6c757d';
+        closeButton.style.transform = '';
     });
+    
     closeButton.addEventListener('focus', () => {
-        closeButton.style.outline = '2px solid #6c757d';
+        closeButton.style.outline = `2px solid ${closeButtonConfig.hoverColor || '#6c757d'}`;
         closeButton.style.outlineOffset = '2px';
     });
+    
     closeButton.addEventListener('blur', () => {
         closeButton.style.outline = '';
         closeButton.style.outlineOffset = '';
     });
     
-    closeButton.addEventListener('click', async () => {
-        await dismissDomain(domain);
-        removeBanner();
-    });
+    closeButton.addEventListener('click', removeBanner);
 
     // Keyboard navigation
     banner.addEventListener('keydown', (e) => {
@@ -358,21 +407,36 @@ function createBanner(message, ezproxyUrl, domain) {
     }, prefersReducedMotion ? 0 : 100);
 }
 
-function removeBanner() {
+// Remove banner notification
+async function removeBanner() {
     const banner = document.getElementById(BANNER_ID);
     if (!banner) return;
-
-    if (!prefersReducedMotion) {
-        // Animate out
-        banner.style.transform = 'translateY(-100%)';
-        setTimeout(() => {
-            banner.remove();
-            restorePageMargin();
-        }, 300);
-    } else {
-        // Immediate removal
+    
+    const bannerConfig = (await getConfig()).banner || {};
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    
+    if (prefersReducedMotion) {
         banner.remove();
         restorePageMargin();
+    } else {
+        banner.style.transition = `transform ${bannerConfig.animationDuration || '0.3s'} ease-out`;
+        banner.style.transform = 'translateY(-100%)';
+        
+        // Use a promise to handle the animation end
+        await new Promise(resolve => {
+            banner.addEventListener('transitionend', () => resolve(), { once: true });
+            // Fallback in case transitionend doesn't fire
+            setTimeout(resolve, bannerConfig.animationDuration ? 
+                (parseFloat(bannerConfig.animationDuration) * 1000) : 300);
+        });
+        
+        banner.remove();
+        restorePageMargin();
+    }
+    
+    // Remove any keyboard focus from banner elements
+    if (document.activeElement && document.activeElement.closest(`#${BANNER_ID}`)) {
+        document.activeElement.blur();
     }
 }
 
