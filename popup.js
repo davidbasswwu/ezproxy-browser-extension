@@ -58,21 +58,62 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Handle reset dismissed domains button
 resetButton.addEventListener('click', async () => {
+    // Show confirmation dialog
+    const confirmed = confirm('Are you sure you want to reset all dismissed domains? This will re-enable the banner for all previously dismissed domains.');
+    
+    if (!confirmed) {
+        return;
+    }
+    
     try {
-        await chrome.storage.local.remove(STORAGE_KEYS.DISMISSED_DOMAINS);
-        statusDiv.textContent = 'Successfully reset all dismissed domains';
-        statusDiv.className = 'status active';
+        // Save the original button text
+        const originalButtonText = resetButton.textContent;
         resetButton.disabled = true;
+        resetButton.textContent = 'Resetting...';
         
-        // Update the status after a short delay
+        // Clear the dismissed domains
+        await chrome.storage.local.remove(STORAGE_KEYS.DISMISSED_DOMAINS);
+        
+        // Update the status
+        updateStatus('Successfully reset all dismissed domains', true);
+        
+        // Reset the extension icon for all tabs
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+            if (tab.id) {
+                try {
+                    await chrome.runtime.sendMessage({
+                        action: 'updateIcon',
+                        tabId: tab.id,
+                        isDismissed: false
+                    });
+                } catch (error) {
+                    console.error(`Error updating icon for tab ${tab.id}:`, error);
+                }
+            }
+        }
+        
+        // Reset the button state after a delay
         setTimeout(() => {
-            const event = new Event('DOMContentLoaded');
-            document.dispatchEvent(event);
-        }, 1500);
+            resetButton.textContent = originalButtonText;
+            resetButton.disabled = false;
+            
+            // Reload the current tab to show the banner if applicable
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0] && tabs[0].id) {
+                    chrome.tabs.reload(tabs[0].id);
+                }
+            });
+            
+            // Close the popup after a short delay
+            setTimeout(() => window.close(), 1000);
+        }, 1000);
+        
     } catch (error) {
         console.error('Error resetting dismissed domains:', error);
-        statusDiv.textContent = 'Error resetting dismissed domains';
-        statusDiv.className = 'status inactive';
+        updateStatus('Error resetting dismissed domains', false);
+        resetButton.disabled = false;
+        resetButton.textContent = 'Try Again';
     }
 });
 
