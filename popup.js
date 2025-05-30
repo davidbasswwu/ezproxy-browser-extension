@@ -58,60 +58,89 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Handle reset dismissed domains button
 resetButton.addEventListener('click', async () => {
+    console.log('Reset button clicked');
+    
     // Show confirmation dialog
     const confirmed = confirm('Are you sure you want to reset all dismissed domains? This will re-enable the banner for all previously dismissed domains.');
     
     if (!confirmed) {
+        console.log('Reset cancelled by user');
         return;
     }
     
     try {
+        console.log('Starting reset process...');
+        
         // Save the original button text
         const originalButtonText = resetButton.textContent;
         resetButton.disabled = true;
         resetButton.textContent = 'Resetting...';
         
         // Clear the dismissed domains
+        console.log('Clearing dismissed domains from storage...');
         await chrome.storage.local.remove(STORAGE_KEYS.DISMISSED_DOMAINS);
+        console.log('Dismissed domains cleared');
+        
+        // Verify the domains were cleared
+        const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
+        console.log('Storage after clear:', result);
         
         // Update the status
-        updateStatus('Successfully reset all dismissed domains', true);
+        updateStatus('Successfully reset all dismissed domains. Reloading page...', true);
         
-        // Reset the extension icon for all tabs
-        const tabs = await chrome.tabs.query({});
-        for (const tab of tabs) {
-            if (tab.id) {
+        // Get the current active tab first
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        console.log('Current active tab:', currentTab);
+        
+        if (currentTab && currentTab.id) {
+            // Reset the icon for the current tab first
+            console.log(`Updating icon for current tab ${currentTab.id}`);
+            try {
+                await chrome.runtime.sendMessage({
+                    action: 'updateIcon',
+                    tabId: currentTab.id,
+                    isDismissed: false
+                });
+                console.log('Icon updated for current tab');
+            } catch (error) {
+                console.error('Error updating icon for current tab:', error);
+            }
+            
+            // Reload the current tab to show the banner
+            console.log('Reloading current tab...');
+            await chrome.tabs.reload(currentTab.id);
+            console.log('Current tab reloaded');
+        }
+        
+        // Reset icons for all other tabs in the background
+        console.log('Updating icons for all tabs...');
+        const allTabs = await chrome.tabs.query({});
+        for (const tab of allTabs) {
+            if (tab.id && tab.id !== currentTab?.id) {
                 try {
                     await chrome.runtime.sendMessage({
                         action: 'updateIcon',
                         tabId: tab.id,
                         isDismissed: false
                     });
+                    console.log(`Updated icon for tab ${tab.id}`);
                 } catch (error) {
                     console.error(`Error updating icon for tab ${tab.id}:`, error);
                 }
             }
         }
         
-        // Reset the button state after a delay
+        console.log('Reset process completed');
+        
+        // Close the popup after a short delay
         setTimeout(() => {
-            resetButton.textContent = originalButtonText;
-            resetButton.disabled = false;
-            
-            // Reload the current tab to show the banner if applicable
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                if (tabs[0] && tabs[0].id) {
-                    chrome.tabs.reload(tabs[0].id);
-                }
-            });
-            
-            // Close the popup after a short delay
-            setTimeout(() => window.close(), 1000);
+            console.log('Closing popup...');
+            window.close();
         }, 1000);
         
     } catch (error) {
-        console.error('Error resetting dismissed domains:', error);
-        updateStatus('Error resetting dismissed domains', false);
+        console.error('Error in reset process:', error);
+        updateStatus('Error: ' + (error.message || 'Failed to reset domains'), false);
         resetButton.disabled = false;
         resetButton.textContent = 'Try Again';
     }

@@ -335,42 +335,77 @@ async function testIconUpdate() {
 
 // Helper function to update the extension icon
 async function updateExtensionIcon(tabId, isDismissed) {
-    console.log(`Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
-    const iconPath = {
+    console.log(`[updateExtensionIcon] Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
+    
+    // Define icon paths
+    const icons = {
         '16': `images/icon${isDismissed ? '-dismissed' : ''}-16.png`,
+        '32': `images/icon${isDismissed ? '-dismissed' : ''}-32.png`,
         '48': 'images/icon-48.png',
         '128': 'images/icon-128.png'
     };
     
-    console.log('Using icon path:', iconPath);
+    console.log('[updateExtensionIcon] Using icon paths:', icons);
+    
+    // Set the title based on dismissed state
+    const title = isDismissed 
+        ? 'EZProxy: Banner is dismissed for this domain'
+        : 'EZProxy: Click to access library resources';
     
     try {
-        // First try with tab-specific icon
-        await chrome.action.setIcon({
-            tabId: tabId,
-            path: iconPath
-        });
-        console.log('Tab-specific icon update successful');
+        // First try to update the tab-specific icon
+        if (tabId) {
+            console.log(`[updateExtensionIcon] Updating icon for specific tab ${tabId}`);
+            try {
+                await chrome.action.setIcon({
+                    tabId: tabId,
+                    path: icons
+                });
+                console.log(`[updateExtensionIcon] Successfully updated tab ${tabId} icon`);
+                
+                // Also update the title
+                await chrome.action.setTitle({
+                    tabId: tabId,
+                    title: title
+                });
+                console.log(`[updateExtensionIcon] Set title for tab ${tabId}: ${title}`);
+                
+                // Also update the badge
+                await chrome.action.setBadgeText({
+                    tabId: tabId,
+                    text: isDismissed ? 'X' : ''
+                });
+                
+                await chrome.action.setBadgeBackgroundColor({
+                    tabId: tabId,
+                    color: isDismissed ? '#dc3545' : [0, 0, 0, 0]
+                });
+                
+                return; // Successfully updated tab-specific icon
+                
+            } catch (tabError) {
+                console.error(`[updateExtensionIcon] Error updating tab ${tabId} icon:`, tabError);
+                // Continue to try updating the global icon
+            }
+        }
         
-        // Also update the global icon as a fallback
+        // If we get here, either tabId wasn't provided or tab-specific update failed
+        console.log('[updateExtensionIcon] Updating global icon');
         await chrome.action.setIcon({
-            tabId: undefined, // This updates the global icon
-            path: iconPath
+            tabId: undefined, // Update global icon
+            path: icons
         });
-        console.log('Global icon update successful');
         
-        // Update the title to indicate the status
-        const title = isDismissed 
-            ? 'EZProxy: Banner is dismissed for this domain'
-            : 'EZProxy: Click to access library resources';
-            
+        // Update global title
         await chrome.action.setTitle({
-            tabId: tabId,
+            tabId: undefined,
             title: title
         });
-        console.log('Title updated to:', title);
+        
+        console.log('[updateExtensionIcon] Successfully updated global icon and title');
+        
     } catch (error) {
-        console.error('Error updating icon:', error);
+        console.error('[updateExtensionIcon] Error in updateExtensionIcon:', error);
         throw error;
     }
 }
