@@ -94,9 +94,24 @@ function hasInstitutionalAccess(config) {
     
     // Check if any indicator is found in the page text
     const normalizedPageText = pageText.toLowerCase();
-    return accessIndicators.some(indicator => 
-        indicator && normalizedPageText.includes(indicator.toLowerCase())
-    );
+    
+    // Debug logging
+    console.log('Checking for institutional access...');
+    console.log('Institution name:', institutionName);
+    console.log('Access indicators:', accessIndicators);
+    console.log('Page text sample:', pageText.substring(0, 500) + '...');
+    
+    const hasAccess = accessIndicators.some(indicator => {
+        if (!indicator) return false;
+        const found = normalizedPageText.includes(indicator.toLowerCase());
+        if (found) {
+            console.log('Found access indicator in page text:', indicator);
+        }
+        return found;
+    });
+    
+    console.log('Institutional access detected:', hasAccess);
+    return hasAccess;
 }
 
 async function isDomainDismissed(domain) {
@@ -529,17 +544,24 @@ async function init() {
  * @param {string} url - The URL to check
  */
 async function checkAndShowBanner(url) {
+    console.log('[checkAndShowBanner] Starting check for URL:', url);
+    
     try {
+        console.log('[checkAndShowBanner] Loading config and domain list...');
         const config = await getConfig();
+        console.log('[checkAndShowBanner] Config loaded:', config);
+        
         const domainList = await getDomainList();
+        console.log('[checkAndShowBanner] Domain list loaded,', domainList.length, 'domains found');
         
         // Parse the URL to get the domain
         let domain;
         try {
             const urlObj = new URL(url);
             domain = urlObj.hostname;
+            console.log('[checkAndShowBanner] Extracted domain:', domain);
         } catch (e) {
-            console.error('Invalid URL:', url);
+            console.error('[checkAndShowBanner] Invalid URL:', url, 'Error:', e);
             return;
         }
         
@@ -548,7 +570,10 @@ async function checkAndShowBanner(url) {
             domain === d || domain.endsWith('.' + d)
         );
         
+        console.log('[checkAndShowBanner] Matched domain in list:', matchedDomain || 'No match found');
+        
         if (!matchedDomain) {
+            console.log('[checkAndShowBanner] Domain not in list, updating icon to normal state');
             // Update icon to normal state for non-library domains
             const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
             if (tab && tab.id) {
@@ -563,7 +588,10 @@ async function checkAndShowBanner(url) {
         
         // Check if the domain is dismissed
         const isDismissed = await isDomainDismissed(matchedDomain);
+        console.log('[checkAndShowBanner] Domain dismissed status:', isDismissed);
+        
         if (isDismissed) {
+            console.log('[checkAndShowBanner] Domain is dismissed, updating icon to dismissed state');
             // Update icon to dismissed state
             const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
             if (tab && tab.id) {
@@ -577,14 +605,20 @@ async function checkAndShowBanner(url) {
         }
         
         // Check if user has institutional access
-        if (hasInstitutionalAccess(config)) {
-            console.log('User has institutional access, skipping EZProxy notification');
+        console.log('[checkAndShowBanner] Checking for institutional access...');
+        const hasAccess = hasInstitutionalAccess(config);
+        
+        if (hasAccess) {
+            console.log('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
             return;
+        } else {
+            console.log('[checkAndShowBanner] No institutional access detected, proceeding with banner check');
         }
         
-        // Check if domain was previously dismissed
-        if (await isDomainDismissed(matchedDomain)) {
-            console.log('Domain was previously dismissed, skipping notification');
+        // Double-check if domain was previously dismissed (shouldn't be needed but just in case)
+        const isStillDismissed = await isDomainDismissed(matchedDomain);
+        if (isStillDismissed) {
+            console.log('[checkAndShowBanner] Domain was previously dismissed, skipping notification');
             return;
         }
         
@@ -603,16 +637,18 @@ async function checkAndShowBanner(url) {
         }
         
         const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
-        console.log('Created EZProxy URL:', ezproxyUrl);
+        console.log('[checkAndShowBanner] Created EZProxy URL:', ezproxyUrl);
         
+        console.log('[checkAndShowBanner] Creating banner...');
         // Show the banner
-        createBanner(
+        await createBanner(
             `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`,
             ezproxyUrl,
             matchedDomain
         );
+        console.log('[checkAndShowBanner] Banner creation completed');
     } catch (error) {
-        console.error('Error in checkAndShowBanner:', error);
+        console.error('[checkAndShowBanner] Error:', error);
     }
 }
 
