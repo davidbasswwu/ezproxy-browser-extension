@@ -90,7 +90,24 @@ async function getDomainList() {
 async function redirectToEZProxy(url) {
     try {
         const config = await (await fetch(chrome.runtime.getURL('config.json'))).json();
-        const ezproxyUrl = `${config.ezproxyBaseUrl}${url}`;
+        
+        // Ensure the target URL is properly formatted
+        let targetUrl = url;
+        if (targetUrl.startsWith('http://')) {
+            targetUrl = targetUrl.substring(7); // Remove http://
+        } else if (targetUrl.startsWith('https://')) {
+            targetUrl = targetUrl.substring(8); // Remove https://
+        }
+        
+        // Ensure the EZProxy base URL ends with a forward slash
+        let ezproxyBase = config.ezproxyBaseUrl;
+        if (!ezproxyBase.endsWith('/')) {
+            ezproxyBase = `${ezproxyBase}/`;
+        }
+        
+        const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
+        console.log('Redirecting to EZProxy URL:', ezproxyUrl);
+        
         await chrome.tabs.update({ url: ezproxyUrl });
         window.close();
     } catch (error) {

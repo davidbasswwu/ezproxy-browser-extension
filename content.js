@@ -499,8 +499,22 @@ async function checkAndShowBanner(url) {
             return;
         }
         
-        // Create the EZProxy URL
-        const ezproxyUrl = `${config.ezproxyBaseUrl}${url}`;
+        // Ensure the EZProxy base URL ends with a forward slash
+        let ezproxyBase = config.ezproxyBaseUrl;
+        if (!ezproxyBase.endsWith('/')) {
+            ezproxyBase = `${ezproxyBase}/`;
+        }
+        
+        // Ensure the target URL doesn't include the protocol
+        let targetUrl = url;
+        if (targetUrl.startsWith('http://')) {
+            targetUrl = targetUrl.substring(7);
+        } else if (targetUrl.startsWith('https://')) {
+            targetUrl = targetUrl.substring(8);
+        }
+        
+        const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
+        console.log('Created EZProxy URL:', ezproxyUrl);
         
         // Show the banner
         createBanner(
