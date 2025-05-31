@@ -369,20 +369,23 @@ async function testIconUpdate() {
 async function updateExtensionIcon(tabId, isDismissed) {
     console.log(`[updateExtensionIcon] Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
     
-    // Define icon paths - using chrome.runtime.getURL() for proper resource loading
-    const getIconPath = (size, dismissed = false) => 
-        chrome.runtime.getURL(`images/icon${dismissed ? '-dismissed' : ''}-${size}.png`);
-        
+    // Helper function to get the correct icon path
+    const getIconPath = (size, dismissed = false) => {
+        const filename = `images/icon${dismissed ? '-dismissed' : ''}-${size}.png`;
+        const url = chrome.runtime.getURL(filename);
+        console.log(`[getIconPath] size: ${size}, dismissed: ${dismissed}, path: ${url}`);
+        return url;
+    };
+    
+    // Define all icon variants we need
     const icons = {
         '16': getIconPath(16, isDismissed),
         '32': getIconPath(32, isDismissed),
-        '48': chrome.runtime.getURL('images/icon-48.png'),
-        '128': chrome.runtime.getURL('images/icon-128.png')
+        '48': getIconPath(48, isDismissed),
+        '128': getIconPath(128, false) // Only regular variant for 128px
     };
     
-    console.log('Using icon paths:', icons);
-    
-    console.log('[updateExtensionIcon] Using icon paths:', icons);
+    console.log('[updateExtensionIcon] Using icon paths:', JSON.stringify(icons, null, 2));
     
     // Set the title based on dismissed state
     const title = isDismissed 
@@ -394,9 +397,13 @@ async function updateExtensionIcon(tabId, isDismissed) {
         if (tabId) {
             console.log(`[updateExtensionIcon] Updating icon for specific tab ${tabId}`);
             try {
+                // First try with all sizes
                 await chrome.action.setIcon({
                     tabId: tabId,
-                    path: icons
+                    path: {
+                        '16': getIconPath(16, isDismissed),
+                        '32': getIconPath(32, isDismissed)
+                    }
                 });
                 console.log(`[updateExtensionIcon] Successfully updated tab ${tabId} icon`);
                 
