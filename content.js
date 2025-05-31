@@ -194,36 +194,66 @@ async function updateExtensionIcon(domain, isDismissed) {
 async function dismissDomain(domain) {
     console.log('Dismissing domain:', domain);
     try {
+        // Save the dismissed domain to storage
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
+        
         if (!dismissedDomains.includes(domain)) {
             dismissedDomains.push(domain);
             console.log('Saving dismissed domains:', dismissedDomains);
             await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
             
-            // Get the current tab
-            const tabs = await new Promise(resolve => {
-                chrome.tabs.query({ active: true, currentWindow: true }, resolve);
-            });
-            
-            if (tabs && tabs[0] && tabs[0].id) {
-                console.log('Updating icon for tab:', tabs[0].id);
-                // Directly call the background script's updateIcon function
-                await chrome.runtime.sendMessage({
-                    action: 'updateIcon',
-                    tabId: tabs[0].id,
-                    isDismissed: true
-                });
+            // Notify the background script to update the icon
+            try {
+                // First try to get the current tab ID
+                let tabId;
                 
-                // Also update the badge to show dismissed state
-                await chrome.action.setBadgeText({
-                    tabId: tabs[0].id,
-                    text: 'X'
-                });
-                await chrome.action.setBadgeBackgroundColor({
-                    tabId: tabs[0].id,
-                    color: '#dc3545' // Red color
-                });
+                // Method 1: Try using chrome.tabs if available
+                if (chrome.tabs && chrome.tabs.query) {
+                    try {
+                        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                        if (tabs && tabs[0]?.id) {
+                            tabId = tabs[0].id;
+                        }
+                    } catch (e) {
+                        console.warn('Could not get tab ID using chrome.tabs:', e);
+                    }
+                }
+                
+                // Method 2: If we couldn't get tabId, use a message to the background script
+                if (!tabId) {
+                    console.log('No tab ID available, using background script to update icon');
+                    await chrome.runtime.sendMessage({
+                        action: 'dismissDomain',
+                        domain: domain
+                    });
+                } else {
+                    console.log('Updating icon for tab:', tabId);
+                    // Update the icon directly if we have the tab ID
+                    await chrome.runtime.sendMessage({
+                        action: 'updateIcon',
+                        tabId: tabId,
+                        isDismissed: true
+                    });
+                    
+                    // Update badge if available
+                    if (chrome.action && chrome.action.setBadgeText) {
+                        try {
+                            await chrome.action.setBadgeText({
+                                tabId: tabId,
+                                text: 'X'
+                            });
+                            await chrome.action.setBadgeBackgroundColor({
+                                tabId: tabId,
+                                color: '#dc3545' // Red color
+                            });
+                        } catch (e) {
+                            console.warn('Could not update badge:', e);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error updating icon:', e);
             }
         }
     } catch (error) {

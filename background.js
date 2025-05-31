@@ -261,8 +261,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 });
 
-// Listen for messages from content scripts
+// Listen for messages from content scripts and popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('Received message in background:', request.action || 'unknown action', request);
+    
+    // Handle updateIcon action
     if (request.action === 'updateIcon') {
         updateExtensionIcon(request.tabId, request.isDismissed)
             .then(() => sendResponse({ success: true }))
@@ -273,6 +276,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Required for async response
     }
     
+    // Handle dismissDomain action
+    if (request.action === 'dismissDomain') {
+        console.log('Handling dismissDomain for domain:', request.domain);
+        // Get the current active tab to update its icon
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs && tabs[0] && tabs[0].id) {
+                console.log('Updating icon for tab:', tabs[0].id);
+                updateExtensionIcon(tabs[0].id, true)
+                    .then(() => {
+                        console.log('Icon updated successfully after domain dismissal');
+                        sendResponse({ success: true });
+                    })
+                    .catch(error => {
+                        console.error('Error updating icon after domain dismissal:', error);
+                        sendResponse({ success: false, error: error.message });
+                    });
+            } else {
+                console.warn('No active tab found to update icon');
+                sendResponse({ success: false, error: 'No active tab found' });
+            }
+        });
+        return true; // Required for async response
+    }
+    
+    // Handle getTab action
     if (request.action === 'getTab') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             sendResponse(tabs);
@@ -280,11 +308,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Required for async response
     }
     
+    // Handle getTabId action
     if (request.action === 'getTabId') {
         sendResponse({ tabId: sender.tab ? sender.tab.id : null });
         return true;
     }
     
+    // Handle GET_CONFIG action
     if (request.type === 'GET_CONFIG') {
         if (CONFIG) {
             sendResponse({ config: CONFIG });
@@ -299,6 +329,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Required for async response
     }
     
+    // Log unhandled messages for debugging
+    console.warn('Unhandled message in background script:', request);
     return false;
 });
 
