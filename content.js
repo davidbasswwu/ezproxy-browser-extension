@@ -261,12 +261,18 @@ async function dismissDomain(domain) {
     }
 }
 
+/**
+ * Checks if auto-redirect is enabled in the extension settings
+ * @returns {Promise<boolean>} True if auto-redirect is enabled
+ */
 async function shouldAutoRedirect() {
     try {
-        const result = await chrome.storage.local.get(STORAGE_KEY_AUTO_REDIRECT);
-        return result[STORAGE_KEY_AUTO_REDIRECT] === true;
+        const result = await chrome.storage.local.get(STORAGE_KEYS.AUTO_REDIRECT);
+        // Return the stored value or default to false if not set
+        return result[STORAGE_KEYS.AUTO_REDIRECT] === true;
     } catch (error) {
         console.error('Error checking auto-redirect setting:', error);
+        // Default to false on error to avoid unwanted redirects
         return false;
     }
 }
