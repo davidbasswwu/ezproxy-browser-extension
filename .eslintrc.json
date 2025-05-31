@@ -1,0 +1,45 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "webextensions": true,
+    "jest": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:security/recommended",
+    "plugin:import/errors",
+    "plugin:import/warnings"
+  ],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "plugins": ["security", "import"],
+  "rules": {
+    "security/detect-object-injection": "warn",
+    "security/detect-non-literal-fs-filename": "error",
+    "security/detect-non-literal-require": "error",
+    "security/detect-unsafe-regex": "error",
+    "security/detect-buffer-noassert": "error",
+    "security/detect-child-process": "error",
+    "security/detect-disable-mustache-escape": "error",
+    "security/detect-eval-with-expression": "error",
+    "security/detect-no-csrf-before-method-override": "error",
+    "security/detect-non-literal-regexp": "error",
+    "security/detect-pseudoRandomBytes": "error",
+    "security/detect-possible-timing-attacks": "error",
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-script-url": "error"
+  },
+  "settings": {
+    "import/resolver": {
+      "node": {
+        "extensions": [".js", ".json"]
+      }
+    },
+    "security/detect-object-injection": ["error", "always"]
+  }
+}

@@ -1,8 +1,63 @@
 // background.js
+import { RATE_LIMIT, isValidUrl, encryptData, decryptData } from './utils/security.js';
 
 // Configuration will be loaded from config.json
 let CONFIG = null;
 let DOMAIN_LIST = new Set();
+
+// Cache for transformed URLs to improve performance
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Security headers for all fetch requests
+const SECURE_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+};
+
+// CSRF protection
+const CSRF_TOKENS = new Map();
+
+/**
+ * Generate and store a CSRF token
+ * @param {string} sessionId - The session identifier
+ * @returns {string} - The generated CSRF token
+ */
+function generateCsrfToken(sessionId) {
+    const token = crypto.randomUUID();
+    CSRF_TOKENS.set(sessionId, {
+        token,
+        expires: Date.now() + 3600000 // 1 hour expiration
+    });
+    return token;
+}
+
+/**
+ * Validate a CSRF token
+ * @param {string} sessionId - The session identifier
+ * @param {string} token - The token to validate
+ * @returns {boolean} - True if the token is valid
+ */
+function validateCsrfToken(sessionId, token) {
+    const stored = CSRF_TOKENS.get(sessionId);
+    if (!stored || stored.expires < Date.now()) {
+        CSRF_TOKENS.delete(sessionId);
+        return false;
+    }
+    return stored.token === token;
+}
+
+// Clean up expired CSRF tokens every hour
+setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, { expires }] of CSRF_TOKENS.entries()) {
+        if (expires < now) {
+            CSRF_TOKENS.delete(sessionId);
+        }
+    }
+}, 3600000); // Run every hour
 
 // Constants
 const MIN_UPDATE_INTERVAL = 60000; // 1 minute
@@ -13,7 +68,17 @@ const urlTransformCache = new Map();
 async function loadConfig() {
     try {
         const configUrl = chrome.runtime.getURL('config.json');
-        const response = await fetch(configUrl);
+        const response = await fetch(configUrl, {
+            credentials: 'same-origin',
+            headers: SECURE_HEADERS,
+            integrity: 'YOUR_SRI_HASH_HERE' // Add SRI hash for config.json
+        });
+        
+        // Verify content type
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Invalid content type');
+        }
         if (!response.ok) {
             throw new Error(`Failed to load configuration: ${response.status}`);
         }
@@ -85,14 +150,40 @@ async function loadLocalDomainList() {
 }
 
 async function fetchWithRetry(url, maxRetries = CONFIG.retryAttempts, retryDelay = CONFIG.retryDelay) {
+    // Apply rate limiting
+    const rateLimitKey = `fetch:${new URL(url).hostname}`;
+    if (!RATE_LIMIT.isAllowed(rateLimitKey)) {
+        throw new Error('Rate limit exceeded');
+    }
+    
     let lastError;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const response = await fetch(url);
+            // Add cache busting for GET requests
+            const cacheBuster = `_=${Date.now()}`;
+            const requestUrl = url + (url.includes('?') ? '&' : '?') + cacheBuster;
+            
+            const response = await fetch(requestUrl, {
+                credentials: 'same-origin',
+                headers: {
+                    ...SECURE_HEADERS,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
+            });
+            
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
+            
+            // Verify content type
+            const contentType = response.headers.get('content-type');
+            if (contentType && !contentType.includes('application/json')) {
+                throw new Error(`Unexpected content type: ${contentType}`);
+            }
+            
             return response;
         } catch (error) {
             lastError = error;

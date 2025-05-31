@@ -1,11 +1,33 @@
 // content.js
+import { sanitizeInput, isValidUrl } from './utils/security.js';
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
 const STORAGE_KEYS = {
     DISMISSED_DOMAINS: 'ezproxy-dismissed-domains',
-    AUTO_REDIRECT: 'ezproxy-auto-redirect'
+    AUTO_REDIRECT: 'ezproxy-auto-redirect',
+    SESSION_ID: 'ezproxy-session-id'
 };
+
+// Generate a unique session ID if not exists
+async function getSessionId() {
+    let { sessionId } = await chrome.storage.local.get(STORAGE_KEYS.SESSION_ID);
+    if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        await chrome.storage.local.set({ [STORAGE_KEYS.SESSION_ID]: sessionId });
+    }
+    return sessionId;
+}
+
+// Sanitize HTML to prevent XSS
+function sanitizeHTML(html) {
+    if (!html) return '';
+    
+    const doc = document.implementation.createHTMLDocument('');
+    const div = doc.createElement('div');
+    div.textContent = html;
+    return div.innerHTML;
+}
 
 // Icon paths
 const ICON_PATHS = {

@@ -8,9 +8,12 @@
     "activeTab",
     "storage",
     "action",
-    "scripting"
+    "scripting",
+    "webNavigation"
   ],
-  "host_permissions": ["https://*/*"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -20,7 +23,7 @@
     "all_frames": true
   }],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https:; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
   },
   "web_accessible_resources": [{
     "resources": [
