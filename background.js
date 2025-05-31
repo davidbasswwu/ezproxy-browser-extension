@@ -273,19 +273,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Required for async response
     }
     
-    if (message.action === 'getTab') {
+    if (request.action === 'getTab') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             sendResponse(tabs);
         });
         return true; // Required for async response
     }
     
-    if (message.action === 'getTabId') {
+    if (request.action === 'getTabId') {
         sendResponse({ tabId: sender.tab ? sender.tab.id : null });
         return true;
     }
     
-    if (message.type === 'GET_CONFIG') {
+    if (request.type === 'GET_CONFIG') {
         if (CONFIG) {
             sendResponse({ config: CONFIG });
         } else {

@@ -64,54 +64,107 @@ async function getConfig() {
  * @returns {boolean} True if institutional access is detected
  */
 function hasInstitutionalAccess(config) {
-    if (!config || !config.institutionName) {
-        console.warn('No institution name configured for access check');
+    console.log('[hasInstitutionalAccess] Checking for institutional access indicators...');
+    
+    if (!config) {
+        console.warn('[hasInstitutionalAccess] No config provided');
         return false;
     }
     
-    const pageText = document.body.textContent || '';
-    const institutionName = config.institutionName.toLowerCase();
+    // Get page text safely
+    const pageText = document.body?.textContent || document.documentElement?.textContent || '';
+    if (!pageText) {
+        console.warn('[hasInstitutionalAccess] Could not get page text');
+        return false;
+    }
     
-    // Create a domain from the institution name as a fallback
-    const domainFromName = institutionName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '.') // Replace non-alphanumeric with dots
-        .replace(/(^\.|\.$)/g, '');  // Remove leading/trailing dots
+    // Get institution name and domain from config with defaults
+    const instName = (config.institutionName || 'WWU').toLowerCase();
+    const domain = (config.institutionDomain || 'wwu.edu').toLowerCase();
     
-    // Check for common access indicators
+    console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', domain);
+    
+    // Check for common indicators of institutional access
     const accessIndicators = [
         'access provided by',
         'authenticated via',
         'logged in as',
-        institutionName,
-        domainFromName
+        'institution:',
+        'institution=',
+        `institution=${instName}`,
+        `institution=${domain}`,
+        instName,
+        domain
     ];
     
-    // Add any additional indicators from config if available
+    // Add any custom indicators from config
     if (Array.isArray(config.accessIndicators)) {
-        accessIndicators.push(...config.accessIndicators);
+        accessIndicators.push(...config.accessIndicators.map(i => i.toLowerCase()));
     }
     
-    // Check if any indicator is found in the page text
+    // Log what we're checking for
+    console.log('[hasInstitutionalAccess] Checking page for indicators:', accessIndicators);
+    
+    // Convert page text to lowercase once for case-insensitive search
     const normalizedPageText = pageText.toLowerCase();
+    console.log('[hasInstitutionalAccess] Page text sample (first 500 chars):', 
+        normalizedPageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
     
-    // Debug logging
-    console.log('Checking for institutional access...');
-    console.log('Institution name:', institutionName);
-    console.log('Access indicators:', accessIndicators);
-    console.log('Page text sample:', pageText.substring(0, 500) + '...');
-    
-    const hasAccess = accessIndicators.some(indicator => {
+    // Check for access indicators in page text
+    const foundIndicators = [];
+    const hasIndicator = accessIndicators.some(indicator => {
         if (!indicator) return false;
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
-            console.log('Found access indicator in page text:', indicator);
+            foundIndicators.push(indicator);
+            return true;
         }
-        return found;
+        return false;
     });
     
-    console.log('Institutional access detected:', hasAccess);
-    return hasAccess;
+    if (foundIndicators.length > 0) {
+        console.log('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
+        return true;
+    }
+    
+    // Additional check for EZProxy elements in the page
+    const ezproxyElements = [
+        ...Array.from(document.querySelectorAll('a[href*="ezproxy" i]')),
+        ...Array.from(document.querySelectorAll('a[href*="proxy" i]')),
+        ...Array.from(document.querySelectorAll('*')).filter(el => {
+            const text = el.textContent?.toLowerCase() || '';
+            return text.includes('ezproxy') || 
+                   text.includes('proxy login') ||
+                   text.includes('institutional login');
+        })
+    ];
+    
+    if (ezproxyElements.length > 0) {
+        console.log(`[hasInstitutionalAccess] Found ${ezproxyElements.length} EZProxy related elements`);
+        return true;
+    }
+    
+    // Check for access denied or login required pages
+    const deniedIndicators = [
+        'access denied',
+        'login required',
+        'sign in',
+        'log in',
+        'authentication required',
+        'institutional access required'
+    ];
+    
+    const isDeniedPage = deniedIndicators.some(indicator => 
+        normalizedPageText.includes(indicator)
+    );
+    
+    if (isDeniedPage) {
+        console.log('[hasInstitutionalAccess] Detected access denied/login page');
+        return false;
+    }
+    
+    console.log('[hasInstitutionalAccess] No institutional access indicators found');
+    return false;
 }
 
 async function isDomainDismissed(domain) {
@@ -546,109 +599,202 @@ async function init() {
 async function checkAndShowBanner(url) {
     console.log('[checkAndShowBanner] Starting check for URL:', url);
     
+    if (!url || typeof url !== 'string') {
+        console.error('[checkAndShowBanner] Invalid URL provided:', url);
+        return;
+    }
+    
     try {
-        console.log('[checkAndShowBanner] Loading config and domain list...');
-        const config = await getConfig();
-        console.log('[checkAndShowBanner] Config loaded:', config);
+        // Step 1: Load configuration
+        console.log('[checkAndShowBanner] Step 1: Loading configuration...');
+        const config = await getConfig().catch(err => {
+            console.error('[checkAndShowBanner] Failed to load config:', err);
+            throw new Error('Failed to load extension configuration');
+        });
         
-        const domainList = await getDomainList();
-        console.log('[checkAndShowBanner] Domain list loaded,', domainList.length, 'domains found');
+        if (!config) {
+            console.error('[checkAndShowBanner] No configuration loaded');
+            return;
+        }
         
-        // Parse the URL to get the domain
+        console.log('[checkAndShowBanner] Config loaded:', {
+            institutionName: config.institutionName,
+            ezproxyBaseUrl: config.ezproxyBaseUrl ? '***' : 'Not set',
+            hasAccessIndicators: Array.isArray(config.accessIndicators) ? config.accessIndicators.length : 0
+        });
+        
+        // Step 2: Load domain list
+        console.log('[checkAndShowBanner] Step 2: Loading domain list...');
+        const domainList = await getDomainList().catch(err => {
+            console.error('[checkAndShowBanner] Failed to load domain list:', err);
+            throw new Error('Failed to load domain list');
+        });
+        
+        console.log(`[checkAndShowBanner] Domain list loaded with ${domainList.length} entries`);
+        
+        // Step 3: Parse and validate URL
+        console.log('[checkAndShowBanner] Step 3: Parsing URL...');
         let domain;
         try {
             const urlObj = new URL(url);
             domain = urlObj.hostname;
             console.log('[checkAndShowBanner] Extracted domain:', domain);
+            
+            // Check for IP address (skip if it's an IP)
+            if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain)) {
+                console.log('[checkAndShowBanner] IP address detected, skipping banner check');
+                return;
+            }
         } catch (e) {
             console.error('[checkAndShowBanner] Invalid URL:', url, 'Error:', e);
             return;
         }
         
-        // Check if the domain is in our list
-        const matchedDomain = domainList.find(d => 
-            domain === d || domain.endsWith('.' + d)
-        );
-        
-        console.log('[checkAndShowBanner] Matched domain in list:', matchedDomain || 'No match found');
+        // Step 4: Check domain against domain list
+        console.log('[checkAndShowBanner] Step 4: Checking domain against domain list...');
+        const matchedDomain = domainList.find(d => {
+            const exactMatch = domain === d;
+            const subdomainMatch = domain.endsWith('.' + d);
+            console.log(`[checkAndShowBanner] Checking ${d}: exact=${exactMatch}, subdomain=${subdomainMatch}`);
+            return exactMatch || subdomainMatch;
+        });
         
         if (!matchedDomain) {
             console.log('[checkAndShowBanner] Domain not in list, updating icon to normal state');
             // Update icon to normal state for non-library domains
-            const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
-            if (tab && tab.id) {
-                await chrome.runtime.sendMessage({
-                    action: 'updateIcon',
-                    tabId: tab.id,
-                    isDismissed: false
-                });
+            try {
+                const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
+                if (tab?.id) {
+                    await chrome.runtime.sendMessage({
+                        action: 'updateIcon',
+                        tabId: tab.id,
+                        isDismissed: false
+                    });
+                }
+            } catch (e) {
+                console.error('[checkAndShowBanner] Error updating icon for non-library domain:', e);
             }
             return;
         }
         
-        // Check if the domain is dismissed
-        const isDismissed = await isDomainDismissed(matchedDomain);
-        console.log('[checkAndShowBanner] Domain dismissed status:', isDismissed);
+        console.log('[checkAndShowBanner] Matched domain in list:', matchedDomain);
+        
+        // Step 5: Check if domain is dismissed
+        console.log('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
+        const isDismissed = await isDomainDismissed(matchedDomain).catch(err => {
+            console.error('[checkAndShowBanner] Error checking if domain is dismissed:', err);
+            return false; // Default to not dismissed on error
+        });
         
         if (isDismissed) {
             console.log('[checkAndShowBanner] Domain is dismissed, updating icon to dismissed state');
-            // Update icon to dismissed state
-            const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
-            if (tab && tab.id) {
-                await chrome.runtime.sendMessage({
-                    action: 'updateIcon',
-                    tabId: tab.id,
-                    isDismissed: true
-                });
+            try {
+                const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
+                if (tab?.id) {
+                    await chrome.runtime.sendMessage({
+                        action: 'updateIcon',
+                        tabId: tab.id,
+                        isDismissed: true
+                    });
+                }
+            } catch (e) {
+                console.error('[checkAndShowBanner] Error updating icon for dismissed domain:', e);
             }
             return;
         }
         
-        // Check if user has institutional access
-        console.log('[checkAndShowBanner] Checking for institutional access...');
-        const hasAccess = hasInstitutionalAccess(config);
-        
-        if (hasAccess) {
-            console.log('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
-            return;
-        } else {
+        // Step 6: Check for institutional access
+        console.log('[checkAndShowBanner] Step 6: Checking for institutional access...');
+        try {
+            const hasAccess = hasInstitutionalAccess(config);
+            
+            if (hasAccess) {
+                console.log('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
+                return;
+            }
             console.log('[checkAndShowBanner] No institutional access detected, proceeding with banner check');
+        } catch (e) {
+            console.error('[checkAndShowBanner] Error checking institutional access:', e);
+            // Continue with banner display if we can't determine access
         }
         
-        // Double-check if domain was previously dismissed (shouldn't be needed but just in case)
-        const isStillDismissed = await isDomainDismissed(matchedDomain);
+        // Step 7: Double-check if domain was dismissed (race condition protection)
+        console.log('[checkAndShowBanner] Step 7: Verifying domain is still not dismissed...');
+        const isStillDismissed = await isDomainDismissed(matchedDomain).catch(() => false);
         if (isStillDismissed) {
-            console.log('[checkAndShowBanner] Domain was previously dismissed, skipping notification');
+            console.log('[checkAndShowBanner] Domain was dismissed during processing, aborting');
             return;
         }
         
-        // Ensure the EZProxy base URL ends with a forward slash
-        let ezproxyBase = config.ezproxyBaseUrl;
+        // Step 8: Prepare EZProxy URL
+        console.log('[checkAndShowBanner] Step 8: Preparing EZProxy URL...');
+        if (!config.ezproxyBaseUrl) {
+            console.error('[checkAndShowBanner] No EZProxy base URL configured');
+            return;
+        }
+        
+        let ezproxyBase = config.ezproxyBaseUrl.trim();
         if (!ezproxyBase.endsWith('/')) {
             ezproxyBase = `${ezproxyBase}/`;
         }
         
-        // Ensure the target URL doesn't include the protocol
+        // Clean the target URL
         let targetUrl = url;
-        if (targetUrl.startsWith('http://')) {
-            targetUrl = targetUrl.substring(7);
-        } else if (targetUrl.startsWith('https://')) {
-            targetUrl = targetUrl.substring(8);
+        const httpMatch = targetUrl.match(/^https?:\/\/(.*)/i);
+        if (httpMatch) {
+            targetUrl = httpMatch[1];
         }
         
         const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
         console.log('[checkAndShowBanner] Created EZProxy URL:', ezproxyUrl);
         
-        console.log('[checkAndShowBanner] Creating banner...');
-        // Show the banner
-        await createBanner(
-            `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`,
-            ezproxyUrl,
-            matchedDomain
-        );
-        console.log('[checkAndShowBanner] Banner creation completed');
+        // Step 9: Create and show the banner
+        console.log('[checkAndShowBanner] Step 9: Creating banner...');
+        try {
+            await createBanner(
+                `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`,
+                ezproxyUrl,
+                matchedDomain
+            );
+            console.log('[checkAndShowBanner] Banner creation completed successfully');
+        } catch (e) {
+            console.error('[checkAndShowBanner] Error creating banner:', e);
+            throw e; // Re-throw to be caught by the outer try-catch
+        }
     } catch (error) {
-        console.error('[checkAndShowBanner] Error:', error);
+        console.error('[checkAndShowBanner] Unhandled error:', error);
+        // Try to show a generic error banner if possible
+        try {
+            const errorBanner = document.createElement('div');
+            errorBanner.style.position = 'fixed';
+            errorBanner.style.top = '10px';
+            errorBanner.style.right = '10px';
+            errorBanner.style.padding = '10px';
+            errorBanner.style.backgroundColor = '#ffebee';
+            errorBanner.style.border = '1px solid #ef9a9a';
+            errorBanner.style.borderRadius = '4px';
+            errorBanner.style.zIndex = '100000';
+            errorBanner.style.maxWidth = '300px';
+            errorBanner.style.fontFamily = 'Arial, sans-serif';
+            errorBanner.style.fontSize = '14px';
+            errorBanner.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">EZProxy Extension Error</div>
+                <div>${error.message || 'An unknown error occurred'}</div>
+                <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                    Check console for details
+                </div>
+            `;
+            document.body.appendChild(errorBanner);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (document.body.contains(errorBanner)) {
+                    errorBanner.remove();
+                }
+            }, 10000);
+        } catch (e) {
+            console.error('Could not display error banner:', e);
+        }
     }
 }
 
