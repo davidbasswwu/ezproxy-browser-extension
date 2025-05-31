@@ -369,13 +369,18 @@ async function testIconUpdate() {
 async function updateExtensionIcon(tabId, isDismissed) {
     console.log(`[updateExtensionIcon] Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
     
-    // Define icon paths
+    // Define icon paths - using chrome.runtime.getURL() for proper resource loading
+    const getIconPath = (size, dismissed = false) => 
+        chrome.runtime.getURL(`images/icon${dismissed ? '-dismissed' : ''}-${size}.png`);
+        
     const icons = {
-        '16': `images/icon${isDismissed ? '-dismissed' : ''}-16.png`,
-        '32': `images/icon${isDismissed ? '-dismissed' : ''}-32.png`,
-        '48': 'images/icon-48.png',
-        '128': 'images/icon-128.png'
+        '16': getIconPath(16, isDismissed),
+        '32': getIconPath(32, isDismissed),
+        '48': chrome.runtime.getURL('images/icon-48.png'),
+        '128': chrome.runtime.getURL('images/icon-128.png')
     };
+    
+    console.log('Using icon paths:', icons);
     
     console.log('[updateExtensionIcon] Using icon paths:', icons);
     

@@ -26,7 +26,12 @@
     "resources": [
       "config.json",
       "domain-list.json",
-      "images/icon-dismissed-16.png"
+      "images/icon-16.png",
+      "images/icon-32.png",
+      "images/icon-48.png",
+      "images/icon-128.png",
+      "images/icon-dismissed-16.png",
+      "images/icon-dismissed-32.png"
     ],
     "matches": ["<all_urls>"]
   }],
