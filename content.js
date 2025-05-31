@@ -181,10 +181,22 @@ async function isDomainDismissed(domain) {
 // Update the extension icon based on domain dismissal status
 async function updateExtensionIcon(domain, isDismissed) {
     try {
+        // First get the current tab ID
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const tabId = tabs && tabs[0] && tabs[0].id;
+        
+        if (!tabId) {
+            console.warn('Could not get current tab ID for icon update');
+            return;
+        }
+        
+        console.log(`Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
+        
+        // Send message to update the icon
         await chrome.runtime.sendMessage({
             action: 'updateIcon',
-            iconType: isDismissed ? 'DISMISSED' : 'NORMAL',
-            tabId: (await chrome.runtime.sendMessage({ action: 'getTabId' })).tabId
+            tabId: tabId,
+            isDismissed: isDismissed
         });
     } catch (error) {
         console.error('Error updating extension icon:', error);
