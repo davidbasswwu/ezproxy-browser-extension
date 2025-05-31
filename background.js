@@ -414,16 +414,16 @@ async function updateExtensionIcon(tabId, isDismissed) {
                 });
                 console.log(`[updateExtensionIcon] Set title for tab ${tabId}: ${title}`);
                 
-                // Also update the badge
-                await chrome.action.setBadgeText({
-                    tabId: tabId,
-                    text: isDismissed ? 'X' : ''
-                });
+                // // Also update the badge
+                // await chrome.action.setBadgeText({
+                //     tabId: tabId,
+                //     text: isDismissed ? 'X' : ''
+                // });
                 
-                await chrome.action.setBadgeBackgroundColor({
-                    tabId: tabId,
-                    color: isDismissed ? '#dc3545' : [0, 0, 0, 0]
-                });
+                // await chrome.action.setBadgeBackgroundColor({
+                //     tabId: tabId,
+                //     color: isDismissed ? '#dc3545' : [0, 0, 0, 0]
+                // });
                 
                 return; // Successfully updated tab-specific icon
                 

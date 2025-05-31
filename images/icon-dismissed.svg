@@ -3,9 +3,9 @@
    viewBox="0 0 128 128"
    version="1.1"
    id="svg1"
-   sodipodi:docname="icon.svg"
+   sodipodi:docname="icon-dismissed.svg"
    inkscape:version="1.4.2 (ebf0e940, 2025-05-08)"
-   inkscape:export-filename="icon.svg"
+   inkscape:export-filename="icon-dismissed.svg"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -29,7 +29,7 @@
      inkscape:window-width="1712"
      inkscape:window-height="1437"
      inkscape:window-x="1826"
-     inkscape:window-y="497"
+     inkscape:window-y="469"
      inkscape:window-maximized="0"
      inkscape:current-layer="svg1" />
   <rect
@@ -37,7 +37,8 @@
      height="128"
      fill="#0d6efd"
      rx="20"
-     id="rect1" />
+     id="rect1"
+     style="fill:#7f7f7f;fill-opacity:1" />
   <text
      x="67.067291"
      y="93.642082"
