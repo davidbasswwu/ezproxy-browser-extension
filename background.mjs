@@ -1,5 +1,5 @@
 // background.js
-import { RATE_LIMIT, isValidUrl, encryptData, decryptData } from './utils/security.js';
+import { RATE_LIMIT, isValidUrl, encryptData, decryptData } from './utils/security.mjs';
 
 // Configuration will be loaded from config.json
 let CONFIG = null;

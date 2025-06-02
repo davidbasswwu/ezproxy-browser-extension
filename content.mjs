@@ -1,5 +1,5 @@
-// content.js
-import { sanitizeInput, isValidUrl } from './utils/security.js';
+// content.mjs
+import { sanitizeInput, isValidUrl } from './utils/security.mjs';
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
