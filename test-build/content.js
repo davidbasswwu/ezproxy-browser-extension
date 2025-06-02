@@ -105,8 +105,8 @@ async function getConfig() {
  * @param {Object} config - The configuration object
  * @returns {boolean} True if institutional access is detected
  */
-function hasInstitutionalAccess(config) {
-    console.log('[hasInstitutionalAccess] Checking for institutional access indicators...');
+async function hasInstitutionalAccess(config) {
+    console.log('[hasInstitutionalAccess] Checking if user has institutional access');
     
     if (!config) {
         console.warn('[hasInstitutionalAccess] No config provided');
@@ -120,11 +120,33 @@ function hasInstitutionalAccess(config) {
         return false;
     }
     
+    // Get current domain
+    const domain = window.location.hostname;
+    console.log('[hasInstitutionalAccess] Current domain:', domain);
+    
+    // Special case for Nature website
+    if (domain.includes('nature.com')) {
+        console.log('[hasInstitutionalAccess] Nature website detected, performing detailed check');
+        
+        // Look specifically for the full access message on Nature
+        const fullAccessText = 'You have full access to this article via your institution';
+        const hasFullAccess = pageText.toLowerCase().includes(fullAccessText.toLowerCase());
+        
+        if (hasFullAccess) {
+            console.log('[hasInstitutionalAccess] Found Nature full access message:', fullAccessText);
+            return true;
+        }
+        
+        // Log a sample of the page text to debug
+        console.log('[hasInstitutionalAccess] Nature page text sample:', 
+            pageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
+    }
+    
     // Get institution name and domain from config with defaults
     const instName = (config.institutionName || 'WWU').toLowerCase();
-    const domain = (config.institutionDomain || 'wwu.edu').toLowerCase();
+    const configDomain = (config.institutionDomain || 'wwu.edu').toLowerCase();
     
-    console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', domain);
+    console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
     // Check for common indicators of institutional access
     const accessIndicators = [
@@ -134,9 +156,9 @@ function hasInstitutionalAccess(config) {
         'institution:',
         'institution=',
         `institution=${instName}`,
-        `institution=${domain}`,
+        `institution=${configDomain}`,
         instName,
-        domain,
+        configDomain,
         // Additional specific indicators for WWU
         'site license access provided by western washington university',
         'western washington univ',
