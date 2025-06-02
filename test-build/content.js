@@ -142,14 +142,17 @@ async function hasInstitutionalAccess(config) {
             pageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
     }
     
-    // Get institution name and domain from config with defaults
-    const instName = (config.institutionName || 'WWU').toLowerCase();
-    const configDomain = (config.institutionDomain || 'wwu.edu').toLowerCase();
+    // Get institution details from config with defaults
+    const instName = (config.institutionName || 'Institution').toLowerCase();
+    const configDomain = (config.institutionDomain || 'example.edu').toLowerCase();
+    const shortName = (config.institutionShortName || '').toLowerCase();
+    const libraryName = (config.institutionLibraryName || '').toLowerCase();
     
     console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
     // Check for common indicators of institutional access
     const accessIndicators = [
+        // Generic access indicators
         'access provided by',
         'authenticated via',
         'logged in as',
@@ -157,22 +160,49 @@ async function hasInstitutionalAccess(config) {
         'institution=',
         `institution=${instName}`,
         `institution=${configDomain}`,
+        // Institution-specific indicators (from config)
         instName,
         configDomain,
-        // Additional specific indicators for WWU
-        'site license access provided by western washington university',
-        'western washington univ',
-        'wwu libraries',
-        // Full access indicators
-        'you have full access to this article via your institution',
-        'full access via your institution',
-        'full text access available',
-        'you have access to this content'
+        shortName,
+        // Generic full access indicators
+        'you have full access',
+        'full access available',
+        'access to full text'
     ];
+    
+    // Add institution-specific phrases
+    if (instName) {
+        accessIndicators.push(`site license access provided by ${instName}`);
+    }
+    
+    // Add library name if available
+    if (libraryName) {
+        accessIndicators.push(libraryName);
+    } else if (instName) {
+        // Fallback to institution name + libraries
+        accessIndicators.push(`${instName} libraries`);
+    }
+    
+    // Add any domain-specific indicators
+    if (configDomain) {
+        const domainParts = configDomain.split('.');
+        if (domainParts.length >= 2) {
+            // For domains like 'wwu.edu', add 'wwu libraries'
+            const subdomain = domainParts[0];
+            if (subdomain && subdomain !== 'www' && !libraryName) {
+                accessIndicators.push(`${subdomain} libraries`);
+            }
+        }
+    }
     
     // Add any custom indicators from config
     if (Array.isArray(config.accessIndicators)) {
         accessIndicators.push(...config.accessIndicators.map(i => i.toLowerCase()));
+    }
+    
+    // Add full access indicators from config
+    if (Array.isArray(config.fullAccessIndicators)) {
+        accessIndicators.push(...config.fullAccessIndicators.map(i => i.toLowerCase()));
     }
     
     // Log what we're checking for
@@ -275,12 +305,53 @@ async function hasInstitutionalAccess(config) {
         })
     ];
     
-    // Check for WWU logo or branding images
-    const logoElements = Array.from(document.querySelectorAll('img[src*="wwu" i], img[src*="western" i], img[alt*="wwu" i], img[alt*="western washington" i]'));
-    if (logoElements.length > 0) {
-        console.log(`[hasInstitutionalAccess] Found ${logoElements.length} WWU logo/branding elements:`, 
-            logoElements.map(el => ({ src: el.src, alt: el.alt })));
-        return true;
+    // Check for institution logo or branding images
+    // Build selectors based on institution name and domain
+    const logoSelectors = [];
+    
+    // Add selectors based on domain (e.g., 'wwu' from 'wwu.edu')
+    if (configDomain) {
+        const domainParts = configDomain.split('.');
+        if (domainParts.length >= 2) {
+            const subdomain = domainParts[0];
+            if (subdomain && subdomain !== 'www') {
+                logoSelectors.push(`img[src*="${subdomain}" i]`);
+                logoSelectors.push(`img[alt*="${subdomain}" i]`);
+            }
+        }
+    }
+    
+    // Add selectors based on institution name
+    if (instName) {
+        // Split institution name into words
+        const nameWords = instName.split(/\s+/);
+        
+        // Add selectors for each significant word (3+ characters)
+        nameWords.forEach(word => {
+            if (word.length >= 3) {
+                logoSelectors.push(`img[src*="${word}" i]`);
+                logoSelectors.push(`img[alt*="${word}" i]`);
+            }
+        });
+        
+        // Add selector for short name if available
+        if (shortName) {
+            logoSelectors.push(`img[src*="${shortName}" i]`);
+            logoSelectors.push(`img[alt*="${shortName}" i]`);
+        }
+    }
+    
+    // If we have selectors, check for matching images
+    if (logoSelectors.length > 0) {
+        const selector = logoSelectors.join(', ');
+        console.log(`[hasInstitutionalAccess] Checking for logo with selector: ${selector}`);
+        
+        const logoElements = Array.from(document.querySelectorAll(selector));
+        if (logoElements.length > 0) {
+            console.log(`[hasInstitutionalAccess] Found ${logoElements.length} institution logo/branding elements:`, 
+                logoElements.map(el => ({ src: el.src, alt: el.alt })));
+            return true;
+        }
     }
     
     // Check for access buttons or links that indicate the user already has access
