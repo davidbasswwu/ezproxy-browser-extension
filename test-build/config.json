@@ -1,0 +1,56 @@
+{
+    "domainListUrl": "https://libweb.library.wwu.edu/ezproxy/domain-list.json",
+    "ezproxyBaseUrl": "ezproxy.library.wwu.edu",
+    "institutionName": "Western Washington University",
+    "updateInterval": 86400000, 
+    "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
+    "retryAttempts": 3,
+    "retryDelay": 2000,
+    "enableAutoRedirect": false,
+    "enableUserNotifications": true,
+    "bannerMessage": "This resource is available through WWU Libraries. Access the full content via EZProxy.",
+    "version": "1.0",
+    "accessIndicators": [
+        "Access provided by",
+        "WWU",
+        "Western Washington University",
+        "wwu.edu"
+    ],
+    "_comment_accessIndicators": "These strings are used to detect if a page indicates the user already has institutional access. They are case-insensitive.",
+    
+    "banner": {
+        "backgroundColor": "#f8f9fa",
+        "textColor": "#495057",
+        "borderColor": "#dee2e6",
+        "button": {
+            "text": "Access via EZProxy",
+            "backgroundColor": "#0d6efd",
+            "hoverColor": "#0b5ed7",
+            "textColor": "#ffffff",
+            "padding": "8px 16px",
+            "borderRadius": "4px"
+        },
+        "dismissButton": {
+            "text": "Dismiss",
+            "backgroundColor": "transparent",
+            "hoverColor": "#e9ecef",
+            "textColor": "#6c757d",
+            "padding": "6px 12px",
+            "borderRadius": "4px"
+        },
+        "closeButton": {
+            "text": "×",
+            "color": "#6c757d",
+            "hoverColor": "#212529"
+        },
+        "padding": "12px 20px",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+        "fontSize": "14px",
+        "lineHeight": "1.5",
+        "boxShadow": "0 2px 4px rgba(0,0,0,0.1)",
+        "zIndex": "2147483647",
+        "animationDuration": "0.3s",
+        "mobileBreakpoint": "768px"
+    },
+    "_comment_banner": "Styling and text configuration for the EZProxy access banner"
+}
