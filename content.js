@@ -684,8 +684,18 @@ async function createBanner(message, ezproxyUrl, domain) {
 
     // Main redirect button
     const redirectButton = document.createElement('button');
-    redirectButton.textContent = buttonConfig.text || 'Access via EZProxy';
-    redirectButton.setAttribute('aria-label', 'Access this resource via EZProxy');
+    
+    // Check if this is an exception domain and use appropriate button text
+    const isExceptionDomain = sessionStorage.getItem('ezproxy-exception-domain') === 'true';
+    if (isExceptionDomain) {
+        redirectButton.textContent = 'Get Library Help';
+        redirectButton.setAttribute('aria-label', 'Get help from your library for accessing this resource');
+        // Clear the flag after using it
+        sessionStorage.removeItem('ezproxy-exception-domain');
+    } else {
+        redirectButton.textContent = buttonConfig.text || 'Access via EZProxy';
+        redirectButton.setAttribute('aria-label', 'Access this resource via EZProxy');
+    }
     
     // Apply button styles
     redirectButton.style.cssText = `
@@ -1076,14 +1086,35 @@ async function checkAndShowBanner(url) {
             targetUrl = httpMatch[1];
         }
         
-        const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
-        console.log('[checkAndShowBanner] Created EZProxy URL:', ezproxyUrl);
+        // Check if the domain is in the exceptions list
+        const isException = Array.isArray(config.urlExceptions) && 
+            config.urlExceptions.some(exception => matchedDomain.includes(exception));
+        
+        let ezproxyUrl;
+        let bannerMessage;
+        
+        if (isException) {
+            // For exceptions, create a URL to the library help page with the domain as a search parameter
+            const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
+            const helpUrlWithSearch = `${libraryHelpUrl}${libraryHelpUrl.includes('?') ? '&' : '?'}q=${matchedDomain}`;
+            ezproxyUrl = helpUrlWithSearch;
+            bannerMessage = `This resource requires special access. Please contact ${config.institutionName || 'your library'} for assistance.`;
+            console.log(`[checkAndShowBanner] Domain ${matchedDomain} is an exception. Using help URL:`, ezproxyUrl);
+            
+            // Store the exception flag to modify the button text later
+            sessionStorage.setItem('ezproxy-exception-domain', 'true');
+        } else {
+            // Standard EZProxy URL creation
+            ezproxyUrl = `${ezproxyBase}${targetUrl}`;
+            bannerMessage = `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`;
+            console.log('[checkAndShowBanner] Created standard EZProxy URL:', ezproxyUrl);
+        }
         
         // Step 9: Create and show the banner
         console.log('[checkAndShowBanner] Step 9: Creating banner...');
         try {
             await createBanner(
-                `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`,
+                bannerMessage,
                 ezproxyUrl,
                 matchedDomain
             );
