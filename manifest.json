@@ -15,13 +15,13 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.mjs",
+    "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
     "type": "module",
-    "js": ["content.mjs"],
+    "js": ["content.js"],
     "all_frames": true
   }],
   "content_security_policy": {
