@@ -65,7 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateStatus('Banner is currently dismissed for this domain', false);
             accessButton.disabled = false;
             accessButton.textContent = 'Show Banner Again';
-            accessButton.onclick = () => undismissDomain(currentUrl.hostname);
+            accessButton.onclick = async () => {
+                console.log('Show Banner Again button clicked for domain:', currentUrl.hostname);
+                await undismissDomain(currentUrl.hostname);
+            };
         } else {
             updateStatus('This page is a known library resource', true);
             accessButton.disabled = false;
@@ -260,19 +263,38 @@ async function redirectToEZProxy(url) {
 // Helper function to undismiss a domain
 async function undismissDomain(domain) {
     try {
+        console.log('Undismissing domain:', domain);
+        
         // Get the current list of dismissed domains
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
+        console.log('Current dismissed domains:', dismissedDomains);
+        
+        // Find the exact dismissed domain entry that matches the current hostname
+        const matchingDomain = dismissedDomains.find(d => 
+            domain.endsWith(d) || domain === d
+        );
+        
+        if (!matchingDomain) {
+            console.warn('Could not find matching dismissed domain for:', domain);
+            updateStatus('Domain was not found in dismissed list', false);
+            return;
+        }
+        
+        console.log('Found matching dismissed domain:', matchingDomain);
         
         // Remove the domain from the dismissed list
-        const updatedDomains = dismissedDomains.filter(d => d !== domain);
+        const updatedDomains = dismissedDomains.filter(d => d !== matchingDomain);
+        console.log('Updated dismissed domains:', updatedDomains);
         
         // Save the updated list
         await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: updatedDomains });
+        console.log('Saved updated dismissed domains list');
         
         // Update the extension icon to show normal state
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab && tab.id) {
+            console.log('Sending updateIcon message for tab:', tab.id);
             await chrome.runtime.sendMessage({
                 action: 'updateIcon',
                 tabId: tab.id,
@@ -285,6 +307,7 @@ async function undismissDomain(domain) {
             accessButton.textContent = 'Access via EZProxy';
             
             // Reload the current tab to show the banner
+            console.log('Reloading tab:', tab.id);
             await chrome.tabs.reload(tab.id);
             window.close();
         }
