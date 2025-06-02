@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach, beforeAll, afterAll } from '@jest/globals';
-import { RATE_LIMIT, cleanupRateLimiter, isValidUrl, sanitizeInput } from '../utils/security.mjs';
+import { RATE_LIMIT, cleanupRateLimiter, isValidUrl, sanitizeInput } from '../utils/security.js';
 
 // Test rate limiting
 describe('Rate Limiter', () => {
