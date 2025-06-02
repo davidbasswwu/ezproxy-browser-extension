@@ -136,7 +136,11 @@ function hasInstitutionalAccess(config) {
         `institution=${instName}`,
         `institution=${domain}`,
         instName,
-        domain
+        domain,
+        // Additional specific indicators for WWU
+        'site license access provided by western washington university',
+        'western washington univ',
+        'wwu libraries'
     ];
     
     // Add any custom indicators from config
@@ -164,6 +168,44 @@ function hasInstitutionalAccess(config) {
         return false;
     });
     
+    // Special check for indicators in the page header
+    // This is more reliable for detecting institutional access
+    if (!hasIndicator) {
+        console.log('[hasInstitutionalAccess] Checking page header for institutional indicators...');
+        
+        // Get header elements (first 1000px of page content is likely to be header)
+        const headerElements = Array.from(document.querySelectorAll('header, nav, .header, #header, [role="banner"], .banner, .navbar, .navigation'));
+        
+        // Also include any elements in the top portion of the page
+        const topElements = Array.from(document.querySelectorAll('*')).filter(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.top >= 0 && rect.top <= 200 && rect.height > 0 && rect.width > 0;
+        });
+        
+        // Combine and get text content
+        const headerTexts = [...headerElements, ...topElements].map(el => el.textContent?.toLowerCase() || '');
+        const headerText = headerTexts.join(' ');
+        
+        console.log('[hasInstitutionalAccess] Header text sample:', 
+            headerText.substring(0, 200).replace(/\s+/g, ' ').trim() + '...');
+        
+        // Check header text for institutional indicators
+        const headerIndicator = accessIndicators.some(indicator => {
+            if (!indicator) return false;
+            const found = headerText.includes(indicator.toLowerCase());
+            if (found) {
+                foundIndicators.push(`header: ${indicator}`);
+                return true;
+            }
+            return false;
+        });
+        
+        if (headerIndicator) {
+            console.log('[hasInstitutionalAccess] Found access indicators in header:', foundIndicators);
+            return true;
+        }
+    }
+    
     if (foundIndicators.length > 0) {
         console.log('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
         return true;
@@ -180,6 +222,14 @@ function hasInstitutionalAccess(config) {
                    text.includes('institutional login');
         })
     ];
+    
+    // Check for WWU logo or branding images
+    const logoElements = Array.from(document.querySelectorAll('img[src*="wwu" i], img[src*="western" i], img[alt*="wwu" i], img[alt*="western washington" i]'));
+    if (logoElements.length > 0) {
+        console.log(`[hasInstitutionalAccess] Found ${logoElements.length} WWU logo/branding elements:`, 
+            logoElements.map(el => ({ src: el.src, alt: el.alt })));
+        return true;
+    }
     
     if (ezproxyElements.length > 0) {
         console.log(`[hasInstitutionalAccess] Found ${ezproxyElements.length} EZProxy related elements`);
