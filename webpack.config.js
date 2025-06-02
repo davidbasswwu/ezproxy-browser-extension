@@ -3,7 +3,6 @@ const TerserPlugin = require('terser-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
-const ESLintPlugin = require('eslint-webpack-plugin');
 
 module.exports = (env, argv) => ({
   mode: argv.mode === 'production' ? 'production' : 'development',
@@ -71,11 +70,6 @@ module.exports = (env, argv) => ({
         { from: 'domain-list.json', to: '.', noErrorOnMissing: true },
         { from: 'utils', to: 'utils', noErrorOnMissing: true },
       ],
-    }),
-    new ESLintPlugin({
-      extensions: ['js'],
-      exclude: 'node_modules',
-      fix: true
     }),
   ],
   performance: {
