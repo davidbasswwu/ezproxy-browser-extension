@@ -229,8 +229,8 @@ async function loadConfig() {
         const configUrl = chrome.runtime.getURL('config.json');
         const response = await fetch(configUrl, {
             credentials: 'same-origin',
-            headers: SECURE_HEADERS,
-            integrity: 'YOUR_SRI_HASH_HERE' // Add SRI hash for config.json
+            headers: SECURE_HEADERS
+            // Integrity check will be added by the build process
         });
         
         // Verify content type
