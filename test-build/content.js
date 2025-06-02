@@ -140,7 +140,12 @@ function hasInstitutionalAccess(config) {
         // Additional specific indicators for WWU
         'site license access provided by western washington university',
         'western washington univ',
-        'wwu libraries'
+        'wwu libraries',
+        // Full access indicators
+        'you have full access to this article via your institution',
+        'full access via your institution',
+        'full text access available',
+        'you have access to this content'
     ];
     
     // Add any custom indicators from config
@@ -167,6 +172,31 @@ function hasInstitutionalAccess(config) {
         }
         return false;
     });
+    
+    // Additional pattern matching for access messages that might appear in different formats
+    if (!hasIndicator) {
+        // Common patterns for full access messages
+        const accessPatterns = [
+            /full\s+access\s+(?:to|for|available|provided)\s+(?:this|the|your)/i,
+            /you\s+have\s+access\s+(?:to|for|via|through)/i,
+            /access\s+(?:provided|available|granted)\s+(?:by|via|through)\s+(?:your|the)\s+institution/i,
+            /(?:your|this)\s+institution\s+(?:has|provides|grants)\s+access/i
+        ];
+        
+        const hasAccessPattern = accessPatterns.some(pattern => {
+            const match = normalizedPageText.match(pattern);
+            if (match) {
+                foundIndicators.push(`pattern: ${match[0]}`);
+                console.log(`[hasInstitutionalAccess] Found access pattern: ${match[0]}`);
+                return true;
+            }
+            return false;
+        });
+        
+        if (hasAccessPattern) {
+            return true;
+        }
+    }
     
     // Special check for indicators in the page header
     // This is more reliable for detecting institutional access
@@ -228,6 +258,46 @@ function hasInstitutionalAccess(config) {
     if (logoElements.length > 0) {
         console.log(`[hasInstitutionalAccess] Found ${logoElements.length} WWU logo/branding elements:`, 
             logoElements.map(el => ({ src: el.src, alt: el.alt })));
+        return true;
+    }
+    
+    // Check for access buttons or links that indicate the user already has access
+    const accessButtonTexts = [
+        'full text',
+        'pdf',
+        'html full text',
+        'download pdf',
+        'view full text',
+        'read article',
+        'access article',
+        'read full article',
+        'download article'
+    ];
+    
+    // Look for buttons or links with these texts that don't have 'login' or 'sign in' nearby
+    const accessButtons = Array.from(document.querySelectorAll('a, button')).filter(el => {
+        const text = el.textContent?.toLowerCase().trim() || '';
+        const hasAccessText = accessButtonTexts.some(btnText => text.includes(btnText));
+        
+        if (hasAccessText) {
+            // Check if this is not a login button
+            const hasLoginText = text.includes('login') || text.includes('sign in') || 
+                               text.includes('subscribe') || text.includes('purchase');
+            
+            // Also check parent elements for login context
+            const parent = el.parentElement;
+            const parentText = parent?.textContent?.toLowerCase() || '';
+            const parentHasLoginText = parentText.includes('login') || parentText.includes('sign in') || 
+                                     parentText.includes('subscribe') || parentText.includes('purchase');
+            
+            return !hasLoginText && !parentHasLoginText;
+        }
+        return false;
+    });
+    
+    if (accessButtons.length > 0) {
+        console.log(`[hasInstitutionalAccess] Found ${accessButtons.length} access buttons/links:`, 
+            accessButtons.map(el => el.textContent?.trim()));
         return true;
     }
     
