@@ -14,3 +14,4 @@ As of 31 May 2025:
 - [x] Make it possible to update the domain list without having to update the extension
 - [x] Replace hard-coded values with variables to make it easier for other institutions to use this extension
 - [x] Make it possible for the user to disable the extension for a specific domain
+- [x] Add a popup to the extension that shows the status of the extension
