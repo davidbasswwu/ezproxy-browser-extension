@@ -211,9 +211,19 @@ function hasInstitutionalAccess(config) {
 
 async function isDomainDismissed(domain) {
     try {
+        console.log('Checking if domain is dismissed:', domain);
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
-        return dismissedDomains.includes(domain);
+        console.log('Current dismissed domains:', dismissedDomains);
+        
+        // Check if the domain matches any in the dismissed list
+        // using the same logic as in popup.js
+        const isDismissed = dismissedDomains.some(d => 
+            domain.endsWith(d) || domain === d
+        );
+        
+        console.log('Domain dismissed status:', isDismissed);
+        return isDismissed;
     } catch (error) {
         console.error('Error checking dismissed domains:', error);
         return false;
@@ -252,7 +262,14 @@ async function dismissDomain(domain) {
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         
-        if (!dismissedDomains.includes(domain)) {
+        // Check if this exact domain or a parent domain is already in the list
+        const existingDomain = dismissedDomains.find(d => 
+            domain === d || domain.endsWith('.' + d)
+        );
+        
+        if (existingDomain) {
+            console.log('Domain or parent domain already in dismissed list:', existingDomain);
+        } else {
             dismissedDomains.push(domain);
             console.log('Saving dismissed domains:', dismissedDomains);
             await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
@@ -771,12 +788,20 @@ async function checkAndShowBanner(url) {
         
         // Step 5: Check if domain is dismissed
         console.log('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
-        const isDismissed = await isDomainDismissed(matchedDomain).catch(err => {
+        // Check both the matched domain and the current domain
+        const isDismissed = await isDomainDismissed(domain).catch(err => {
             console.error('[checkAndShowBanner] Error checking if domain is dismissed:', err);
             return false; // Default to not dismissed on error
         });
         
-        if (isDismissed) {
+        // Double check with the matched domain from the list if needed
+        let isMatchedDomainDismissed = false;
+        if (!isDismissed && matchedDomain !== domain) {
+            isMatchedDomainDismissed = await isDomainDismissed(matchedDomain).catch(() => false);
+            console.log(`[checkAndShowBanner] Matched domain ${matchedDomain} dismissed status:`, isMatchedDomainDismissed);
+        }
+        
+        if (isDismissed || isMatchedDomainDismissed) {
             console.log('[checkAndShowBanner] Domain is dismissed, updating icon to dismissed state');
             try {
                 const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
@@ -810,8 +835,11 @@ async function checkAndShowBanner(url) {
         
         // Step 7: Double-check if domain was dismissed (race condition protection)
         console.log('[checkAndShowBanner] Step 7: Verifying domain is still not dismissed...');
-        const isStillDismissed = await isDomainDismissed(matchedDomain).catch(() => false);
-        if (isStillDismissed) {
+        const isStillDismissed = await isDomainDismissed(domain).catch(() => false);
+        const isMatchedStillDismissed = matchedDomain !== domain ? 
+            await isDomainDismissed(matchedDomain).catch(() => false) : false;
+            
+        if (isStillDismissed || isMatchedStillDismissed) {
             console.log('[checkAndShowBanner] Domain was dismissed during processing, aborting');
             return;
         }

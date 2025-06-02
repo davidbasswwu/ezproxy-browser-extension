@@ -56,10 +56,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check if domain is dismissed
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
-        const isDismissed = dismissedDomains.some(d => 
-            currentUrl.hostname.endsWith(d) || 
-            currentUrl.hostname === d
+        console.log('Checking dismissed domains:', dismissedDomains);
+        
+        // Find the specific dismissed domain that matches the current hostname
+        const matchingDismissedDomain = dismissedDomains.find(d => 
+            currentUrl.hostname.endsWith(d) || currentUrl.hostname === d
         );
+        console.log('Matching dismissed domain:', matchingDismissedDomain);
+        
+        const isDismissed = !!matchingDismissedDomain;
         
         if (isDismissed) {
             updateStatus('Banner is currently dismissed for this domain', false);
@@ -67,7 +72,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             accessButton.textContent = 'Show Banner Again';
             accessButton.onclick = async () => {
                 console.log('Show Banner Again button clicked for domain:', currentUrl.hostname);
-                await undismissDomain(currentUrl.hostname);
+                // Store the matching domain for undismissing
+                const domainToUndismiss = matchingDismissedDomain || currentUrl.hostname;
+                console.log('Will undismiss domain:', domainToUndismiss);
+                await undismissDomain(domainToUndismiss);
             };
         } else {
             updateStatus('This page is a known library resource', true);
@@ -270,21 +278,36 @@ async function undismissDomain(domain) {
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         console.log('Current dismissed domains:', dismissedDomains);
         
-        // Find the exact dismissed domain entry that matches the current hostname
-        const matchingDomain = dismissedDomains.find(d => 
-            domain.endsWith(d) || domain === d
-        );
-        
-        if (!matchingDomain) {
-            console.warn('Could not find matching dismissed domain for:', domain);
-            updateStatus('Domain was not found in dismissed list', false);
+        if (dismissedDomains.length === 0) {
+            console.warn('No dismissed domains found in storage');
+            updateStatus('No dismissed domains found', false);
             return;
         }
         
-        console.log('Found matching dismissed domain:', matchingDomain);
+        // For debugging, log each domain in the list and check if it matches
+        console.log('Checking each dismissed domain against:', domain);
+        let foundMatches = [];
         
-        // Remove the domain from the dismissed list
-        const updatedDomains = dismissedDomains.filter(d => d !== matchingDomain);
+        dismissedDomains.forEach(d => {
+            const endsWith = domain.endsWith(d);
+            const exactMatch = domain === d;
+            console.log(`Domain: ${d}, endsWith: ${endsWith}, exactMatch: ${exactMatch}`);
+            
+            if (exactMatch || endsWith) {
+                foundMatches.push(d);
+            }
+        });
+        
+        console.log('Found matching dismissed domains:', foundMatches);
+        
+        if (foundMatches.length === 0) {
+            console.warn('Could not find any matching dismissed domains for:', domain);
+            updateStatus('No matching domains found in dismissed list', false);
+            return;
+        }
+        
+        // Remove all matching domains from the dismissed list
+        const updatedDomains = dismissedDomains.filter(d => !foundMatches.includes(d));
         console.log('Updated dismissed domains:', updatedDomains);
         
         // Save the updated list
@@ -293,13 +316,20 @@ async function undismissDomain(domain) {
         
         // Update the extension icon to show normal state
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        console.log('Current tab:', tab);
+        
         if (tab && tab.id) {
             console.log('Sending updateIcon message for tab:', tab.id);
-            await chrome.runtime.sendMessage({
-                action: 'updateIcon',
-                tabId: tab.id,
-                isDismissed: false
-            });
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    action: 'updateIcon',
+                    tabId: tab.id,
+                    isDismissed: false
+                });
+                console.log('Response from updateIcon message:', response);
+            } catch (msgError) {
+                console.error('Error sending updateIcon message:', msgError);
+            }
             
             // Update the UI
             updateStatus('Banner will show again on next visit', true);
