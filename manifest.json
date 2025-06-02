@@ -15,12 +15,10 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
-    "type": "module",
     "js": ["content.js"],
     "all_frames": true
   }],

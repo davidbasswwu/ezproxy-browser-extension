@@ -1,5 +1,25 @@
-// content.js
-import { sanitizeInput, isValidUrl } from './utils/security.js';
+// content.js - No imports version
+// We'll include the necessary functions directly to avoid import issues
+
+// Security utility functions
+function sanitizeInput(input) {
+  if (!input) return '';
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isValidUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+    return ['http:', 'https:'].includes(parsedUrl.protocol);
+  } catch (e) {
+    return false;
+  }
+}
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
