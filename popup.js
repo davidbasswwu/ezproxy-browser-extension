@@ -39,6 +39,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         const currentUrl = new URL(tab.url);
         console.log('Current hostname:', currentUrl.hostname);
         
+        // Load config for EZProxy base and help URL
+        const config = await (await fetch(chrome.runtime.getURL('config.json'))).json();
+        const ezproxyBaseUrl = config.ezproxyBaseUrl;
+        const libraryHelpUrl = config.libraryHelpUrl;
+        const secondaryHelpButtonText = config.secondaryHelpButtonText || 'Info for this site';
+
+        // Utility to extract the base domain (e.g., chronicle.com) from a proxied hostname (e.g., www-chronicle-com.ezproxy.library.wwu.edu)
+        function getBaseDomainFromProxied(hostname, ezproxyBaseUrl) {
+            // Remove the ezproxy part
+            const proxiedPart = hostname.replace('.' + ezproxyBaseUrl, '');
+            // Convert dashes to dots
+            const original = proxiedPart.replace(/-/g, '.');
+            // Return last two parts (base domain)
+            const parts = original.split('.');
+            if (parts.length <= 2) return original;
+            return parts.slice(-2).join('.');
+        }
+
+        // Detect if current page is already proxied
+        if (currentUrl.hostname.includes(ezproxyBaseUrl)) {
+            updateStatus('You are already on a proxied page.', true);
+            accessButton.disabled = false;
+            accessButton.textContent = secondaryHelpButtonText;
+            const baseDomain = getBaseDomainFromProxied(currentUrl.hostname, ezproxyBaseUrl);
+            let helpUrl = libraryHelpUrl;
+            if (helpUrl) {
+                helpUrl += (helpUrl.includes('?') ? '&' : '?') + 'q=' + encodeURIComponent(baseDomain);
+            }
+            accessButton.onclick = () => {
+                chrome.tabs.create({ url: helpUrl });
+                window.close();
+            };
+            return;
+        }
+        
         // Check if domain matches any in the list
         const isDomainInList = domainList.some(domain => {
             const matches = currentUrl.hostname.endsWith(domain) || currentUrl.hostname === domain;
