@@ -64,7 +64,6 @@ $RECYCLE.BIN/
 
 # Build and dependency directories
 node_modules/
-dist/
 build/
 *.log
 npm-debug.log*
