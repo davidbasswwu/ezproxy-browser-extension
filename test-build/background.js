@@ -1,222 +1,8 @@
-// background.js - No imports version
-
-// Security utilities included directly to avoid import issues
-
-// Encryption key (in production, use a more secure key derivation)
-const ENCRYPTION_KEY = 'a1b2c3d4e5f6g7h8';
-
-// Rate limiting configuration
-const RATE_LIMIT = {
-  WINDOW_MS: 1000, // 1 second
-  MAX_REQUESTS: 10,
-  requests: new Map(),
-  intervalId: null,
-
-  /**
-   * Check if the request is allowed based on rate limiting
-   * @param {string} identifier - Unique identifier for the requester
-   * @returns {boolean} - True if the request is allowed
-   */
-  isAllowed: function(identifier) {
-    const now = Date.now();
-    const windowStart = now - this.WINDOW_MS;
-    
-    // Initialize request tracking for new identifiers
-    if (!this.requests.has(identifier)) {
-      this.requests.set(identifier, []);
-    }
-    
-    // Remove old requests outside the current window
-    const requests = this.requests.get(identifier).filter(time => time > windowStart);
-    this.requests.set(identifier, requests);
-    
-    // Check if under rate limit
-    if (requests.length >= this.MAX_REQUESTS) {
-      return false;
-    }
-    
-    // Add current request
-    requests.push(now);
-    return true;
-  },
-  
-  /**
-   * Clean up old entries to prevent memory leaks
-   */
-  cleanup: function() {
-    const now = Date.now();
-    for (const [key, requests] of this.requests.entries()) {
-      const filtered = requests.filter(time => now - time < this.WINDOW_MS * 2);
-      if (filtered.length === 0) {
-        this.requests.delete(key);
-      } else {
-        this.requests.set(key, filtered);
-      }
-    }
-  },
-  
-  /**
-   * Reset the rate limiter state (for testing)
-   */
-  reset: function() {
-    this.requests.clear();
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-  }
-};
-
-// Initialize the rate limiter if in browser environment
-if (typeof window !== 'undefined' && !RATE_LIMIT.intervalId) {
-  RATE_LIMIT.intervalId = setInterval(
-    () => RATE_LIMIT.cleanup(),
-    RATE_LIMIT.WINDOW_MS * 2
-  );
-}
-
-/**
- * Validates if a string is a valid HTTP/HTTPS URL
- * @param {string} url - The URL to validate
- * @returns {boolean} - True if the URL is valid
- */
-function isValidUrl(url) {
-  try {
-    const parsedUrl = new URL(url);
-    return ['http:', 'https:'].includes(parsedUrl.protocol);
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
- * Encrypt data using AES-GCM
- * @param {string} data - Data to encrypt
- * @returns {string} - Encrypted data as base64 string
- */
-async function encryptData(data) {
-  try {
-    const encoder = new TextEncoder();
-    const dataBuffer = encoder.encode(data);
-    
-    // In a real app, use a proper key derivation function
-    const keyBuffer = encoder.encode(ENCRYPTION_KEY);
-    const key = await crypto.subtle.importKey(
-      'raw', keyBuffer, { name: 'AES-GCM' }, false, ['encrypt']
-    );
-    
-    // Generate a random IV
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    
-    // Encrypt the data
-    const encryptedBuffer = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv }, key, dataBuffer
-    );
-    
-    // Combine IV and encrypted data and convert to base64
-    const result = new Uint8Array(iv.length + encryptedBuffer.byteLength);
-    result.set(iv);
-    result.set(new Uint8Array(encryptedBuffer), iv.length);
-    
-    return btoa(String.fromCharCode.apply(null, result));
-  } catch (e) {
-    console.error('Encryption error:', e);
-    return null;
-  }
-}
-
-/**
- * Decrypt data using AES-GCM
- * @param {string} encryptedData - Base64 encoded encrypted data
- * @returns {string} - Decrypted data
- */
-async function decryptData(encryptedData) {
-  try {
-    // Convert base64 to array buffer
-    const encryptedBytes = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
-    
-    // Extract IV and encrypted data
-    const iv = encryptedBytes.slice(0, 12);
-    const data = encryptedBytes.slice(12);
-    
-    // Import the key
-    const encoder = new TextEncoder();
-    const keyBuffer = encoder.encode(ENCRYPTION_KEY);
-    const key = await crypto.subtle.importKey(
-      'raw', keyBuffer, { name: 'AES-GCM' }, false, ['decrypt']
-    );
-    
-    // Decrypt the data
-    const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv }, key, data
-    );
-    
-    // Convert to string
-    const decoder = new TextDecoder();
-    return decoder.decode(decryptedBuffer);
-  } catch (e) {
-    console.error('Decryption error:', e);
-    return null;
-  }
-}
+// background.js
 
 // Configuration will be loaded from config.json
 let CONFIG = null;
 let DOMAIN_LIST = new Set();
-
-// Cache for transformed URLs to improve performance
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// Security headers for all fetch requests
-const SECURE_HEADERS = {
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'X-XSS-Protection': '1; mode=block',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-};
-
-// CSRF protection
-const CSRF_TOKENS = new Map();
-
-/**
- * Generate and store a CSRF token
- * @param {string} sessionId - The session identifier
- * @returns {string} - The generated CSRF token
- */
-function generateCsrfToken(sessionId) {
-    const token = crypto.randomUUID();
-    CSRF_TOKENS.set(sessionId, {
-        token,
-        expires: Date.now() + 3600000 // 1 hour expiration
-    });
-    return token;
-}
-
-/**
- * Validate a CSRF token
- * @param {string} sessionId - The session identifier
- * @param {string} token - The token to validate
- * @returns {boolean} - True if the token is valid
- */
-function validateCsrfToken(sessionId, token) {
-    const stored = CSRF_TOKENS.get(sessionId);
-    if (!stored || stored.expires < Date.now()) {
-        CSRF_TOKENS.delete(sessionId);
-        return false;
-    }
-    return stored.token === token;
-}
-
-// Clean up expired CSRF tokens every hour
-setInterval(() => {
-    const now = Date.now();
-    for (const [sessionId, { expires }] of CSRF_TOKENS.entries()) {
-        if (expires < now) {
-            CSRF_TOKENS.delete(sessionId);
-        }
-    }
-}, 3600000); // Run every hour
 
 // Constants
 const MIN_UPDATE_INTERVAL = 60000; // 1 minute
@@ -227,17 +13,7 @@ const urlTransformCache = new Map();
 async function loadConfig() {
     try {
         const configUrl = chrome.runtime.getURL('config.json');
-        const response = await fetch(configUrl, {
-            credentials: 'same-origin',
-            headers: SECURE_HEADERS
-            // Integrity check will be added by the build process
-        });
-        
-        // Verify content type
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Invalid content type');
-        }
+        const response = await fetch(configUrl);
         if (!response.ok) {
             throw new Error(`Failed to load configuration: ${response.status}`);
         }
@@ -309,40 +85,14 @@ async function loadLocalDomainList() {
 }
 
 async function fetchWithRetry(url, maxRetries = CONFIG.retryAttempts, retryDelay = CONFIG.retryDelay) {
-    // Apply rate limiting
-    const rateLimitKey = `fetch:${new URL(url).hostname}`;
-    if (!RATE_LIMIT.isAllowed(rateLimitKey)) {
-        throw new Error('Rate limit exceeded');
-    }
-    
     let lastError;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            // Add cache busting for GET requests
-            const cacheBuster = `_=${Date.now()}`;
-            const requestUrl = url + (url.includes('?') ? '&' : '?') + cacheBuster;
-            
-            const response = await fetch(requestUrl, {
-                credentials: 'same-origin',
-                headers: {
-                    ...SECURE_HEADERS,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                }
-            });
-            
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
-            // Verify content type
-            const contentType = response.headers.get('content-type');
-            if (contentType && !contentType.includes('application/json')) {
-                throw new Error(`Unexpected content type: ${contentType}`);
-            }
-            
             return response;
         } catch (error) {
             lastError = error;
@@ -619,23 +369,20 @@ async function testIconUpdate() {
 async function updateExtensionIcon(tabId, isDismissed) {
     console.log(`[updateExtensionIcon] Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
     
-    // Helper function to get the correct icon path
-    const getIconPath = (size, dismissed = false) => {
-        const filename = `images/icon${dismissed ? '-dismissed' : ''}-${size}.png`;
-        const url = chrome.runtime.getURL(filename);
-        console.log(`[getIconPath] size: ${size}, dismissed: ${dismissed}, path: ${url}`);
-        return url;
-    };
-    
-    // Define all icon variants we need
+    // Define icon paths - using chrome.runtime.getURL() for proper resource loading
+    const getIconPath = (size, dismissed = false) => 
+        chrome.runtime.getURL(`images/icon${dismissed ? '-dismissed' : ''}-${size}.png`);
+        
     const icons = {
         '16': getIconPath(16, isDismissed),
         '32': getIconPath(32, isDismissed),
-        '48': getIconPath(48, isDismissed),
-        '128': getIconPath(128, false) // Only regular variant for 128px
+        '48': chrome.runtime.getURL('images/icon-48.png'),
+        '128': chrome.runtime.getURL('images/icon-128.png')
     };
     
-    console.log('[updateExtensionIcon] Using icon paths:', JSON.stringify(icons, null, 2));
+    console.log('Using icon paths:', icons);
+    
+    console.log('[updateExtensionIcon] Using icon paths:', icons);
     
     // Set the title based on dismissed state
     const title = isDismissed 
@@ -647,13 +394,9 @@ async function updateExtensionIcon(tabId, isDismissed) {
         if (tabId) {
             console.log(`[updateExtensionIcon] Updating icon for specific tab ${tabId}`);
             try {
-                // First try with all sizes
                 await chrome.action.setIcon({
                     tabId: tabId,
-                    path: {
-                        '16': getIconPath(16, isDismissed),
-                        '32': getIconPath(32, isDismissed)
-                    }
+                    path: icons
                 });
                 console.log(`[updateExtensionIcon] Successfully updated tab ${tabId} icon`);
                 
@@ -664,16 +407,16 @@ async function updateExtensionIcon(tabId, isDismissed) {
                 });
                 console.log(`[updateExtensionIcon] Set title for tab ${tabId}: ${title}`);
                 
-                // // Also update the badge
-                // await chrome.action.setBadgeText({
-                //     tabId: tabId,
-                //     text: isDismissed ? 'X' : ''
-                // });
+                // Also update the badge
+                await chrome.action.setBadgeText({
+                    tabId: tabId,
+                    text: isDismissed ? 'X' : ''
+                });
                 
-                // await chrome.action.setBadgeBackgroundColor({
-                //     tabId: tabId,
-                //     color: isDismissed ? '#dc3545' : [0, 0, 0, 0]
-                // });
+                await chrome.action.setBadgeBackgroundColor({
+                    tabId: tabId,
+                    color: isDismissed ? '#dc3545' : [0, 0, 0, 0]
+                });
                 
                 return; // Successfully updated tab-specific icon
                 
@@ -753,27 +496,50 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             // Remove 'www.' if it exists
             const domainWithoutWww = currentDomain.replace(/^www\./, '');
             
+            // Check for exact match first
+            let matchedDomain = null;
             if (DOMAIN_LIST.has(domainWithoutWww)) {
-                console.log('Domain matches tracking list:', domainWithoutWww);
+                matchedDomain = domainWithoutWww;
+            } else {
+                // If not an exact match, check if it's a subdomain of any domain in our list
+                for (const listedDomain of DOMAIN_LIST) {
+                    if (domainWithoutWww.endsWith('.' + listedDomain)) {
+                        matchedDomain = listedDomain;
+                        break;
+                    }
+                }
+            }
+            
+            if (matchedDomain) {
+                console.log('Domain matches tracking list:', matchedDomain, 'for URL:', tab.url);
                 
-                const ezproxyUrl = buildEzproxyUrl(tab.url, domainWithoutWww);
+                const ezproxyUrl = buildEzproxyUrl(tab.url, matchedDomain);
                 if (!ezproxyUrl) {
-                    console.error('Failed to build EZProxy URL for:', domainWithoutWww);
+                    console.error('Failed to build EZProxy URL for:', matchedDomain);
                     return;
                 }
                 
-                chrome.tabs.sendMessage(tabId, {
-                    type: 'DOMAIN_MATCH',
-                    domain: domainWithoutWww,
-                    originalUrl: tab.url,
-                    ezproxyUrl: ezproxyUrl,
-                    bannerMessage: CONFIG.bannerMessage
-                }).catch(error => {
-                    // This is expected for pages that don't have content scripts loaded
-                    if (!error.message.includes('Receiving end does not exist')) {
-                        console.error('Error sending message to content script:', error);
-                    }
-                });
+                // Try sending the message, and if it fails (content script not ready),
+                // retry after a short delay
+                const sendMessageWithRetry = (retryCount = 0) => {
+                    chrome.tabs.sendMessage(tabId, {
+                        type: 'DOMAIN_MATCH',
+                        domain: matchedDomain,
+                        originalUrl: tab.url,
+                        ezproxyUrl: ezproxyUrl,
+                        bannerMessage: CONFIG.bannerMessage
+                    }).catch(error => {
+                        // If content script isn't ready yet, retry a few times
+                        if (error.message.includes('Receiving end does not exist') && retryCount < 3) {
+                            console.log(`Content script not ready, retrying in ${500 * (retryCount + 1)}ms (attempt ${retryCount + 1}/3)`);
+                            setTimeout(() => sendMessageWithRetry(retryCount + 1), 500 * (retryCount + 1));
+                        } else if (!error.message.includes('Receiving end does not exist')) {
+                            console.error('Error sending message to content script:', error);
+                        }
+                    });
+                };
+                
+                sendMessageWithRetry();
             }
         } catch (error) {
             console.error('Error processing URL:', error);
