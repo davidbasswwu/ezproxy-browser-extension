@@ -2,6 +2,10 @@
     "domainListUrl": "https://libweb.library.wwu.edu/ezproxy/domain-list.json",
     "ezproxyBaseUrl": "ezproxy.library.wwu.edu",
     "institutionName": "Western Washington University",
+    "institutionDomain": "wwu.edu",
+    "institutionShortName": "WWU",
+    "institutionLibraryName": "WWU Libraries",
+    "libraryHelpUrl": "https://askus.library.wwu.edu/search/?q=",
     "updateInterval": 86400000, 
     "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
     "retryAttempts": 3,
@@ -12,11 +16,29 @@
     "version": "1.0",
     "accessIndicators": [
         "Access provided by",
+        "Site License Access Provided By",
         "WWU",
         "Western Washington University",
-        "wwu.edu"
+        "wwu.edu",
+        "WESTERN WASHINGTON UNIV"
     ],
-    "_comment_accessIndicators": "These strings are used to detect if a page indicates the user already has institutional access. They are case-insensitive.",
+    "_comment_accessIndicators": "These strings are used to detect if a page indicates the user already has institutional access. They are case-insensitive. The extension will also automatically use institutionName, institutionDomain, institutionShortName, and institutionLibraryName.",
+    
+    "fullAccessIndicators": [
+        "You have full access to this article via your institution",
+        "Full access via your institution",
+        "Full text access available",
+        "You have access to this content"
+    ],
+    "_comment_fullAccessIndicators": "These strings indicate the user already has full access to the content and doesn't need EZProxy.",
+    
+    "urlExceptions": [
+        "ft.com"
+    ],
+    "_comment_urlExceptions": "Domains that require special handling for EZProxy access. For these domains, users will be redirected to the libraryHelpUrl instead of the standard EZProxy URL.",
+    
+    "secondaryHelpButtonText": "Info for this site",
+    "_comment_secondaryHelpButtonText": "Text for the button that appears on EZProxy pages for exception domains, linking to help information",
     
     "banner": {
         "backgroundColor": "#f8f9fa",
