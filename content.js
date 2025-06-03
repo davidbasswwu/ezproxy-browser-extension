@@ -1,53 +1,11 @@
-// content.js - No imports version
-// We'll include the necessary functions directly to avoid import issues
-
-// Security utility functions
-function sanitizeInput(input) {
-  if (!input) return '';
-  return String(input)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function isValidUrl(url) {
-  try {
-    const parsedUrl = new URL(url);
-    return ['http:', 'https:'].includes(parsedUrl.protocol);
-  } catch (e) {
-    return false;
-  }
-}
+// content.js
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
 const STORAGE_KEYS = {
     DISMISSED_DOMAINS: 'ezproxy-dismissed-domains',
-    AUTO_REDIRECT: 'ezproxy-auto-redirect',
-    SESSION_ID: 'ezproxy-session-id'
+    AUTO_REDIRECT: 'ezproxy-auto-redirect'
 };
-
-// Generate a unique session ID if not exists
-async function getSessionId() {
-    let { sessionId } = await chrome.storage.local.get(STORAGE_KEYS.SESSION_ID);
-    if (!sessionId) {
-        sessionId = crypto.randomUUID();
-        await chrome.storage.local.set({ [STORAGE_KEYS.SESSION_ID]: sessionId });
-    }
-    return sessionId;
-}
-
-// Sanitize HTML to prevent XSS
-function sanitizeHTML(html) {
-    if (!html) return '';
-    
-    const doc = document.implementation.createHTMLDocument('');
-    const div = doc.createElement('div');
-    div.textContent = html;
-    return div.innerHTML;
-}
 
 // Icon paths
 const ICON_PATHS = {
@@ -113,6 +71,16 @@ async function hasInstitutionalAccess(config) {
         return false;
     }
     
+    // Get current domain to check for special cases
+    const currentHostname = window.location.hostname.toLowerCase();
+    
+    // IMPORTANT: For Nature and Chronicle, we'll return false to ensure the banner shows
+    // This is a temporary fix to ensure consistent banner display
+    if (currentHostname.includes('nature.com') || currentHostname.includes('chronicle.com')) {
+        console.log(`[hasInstitutionalAccess] Special case for ${currentHostname}: forcing banner display`);
+        return false;
+    }
+    
     // Enhanced page text extraction with multiple methods
     let pageText = '';
     
@@ -149,19 +117,6 @@ async function hasInstitutionalAccess(config) {
             }
         }
         
-        // Method 4: If still empty, try getting text from all divs with substantial content
-        if (!pageText || pageText.length < 100) {
-            console.log('[hasInstitutionalAccess] Paragraph extraction yielded limited content, trying divs');
-            const divs = document.querySelectorAll('div');
-            if (divs && divs.length > 0) {
-                for (const div of divs) {
-                    if (div.textContent && div.textContent.length > 50) {
-                        pageText += ' ' + div.textContent;
-                    }
-                }
-            }
-        }
-        
         // Clean up the text
         pageText = pageText.trim();
     } catch (error) {
@@ -173,30 +128,6 @@ async function hasInstitutionalAccess(config) {
         // Don't return false immediately - continue with other checks
     }
     
-    // Get current domain
-    const domain = window.location.hostname;
-    console.log('[hasInstitutionalAccess] Current domain:', domain);
-    
-    // Special case for Nature website
-    if (domain.includes('nature.com')) {
-        console.log('[hasInstitutionalAccess] Nature website detected, performing detailed check');
-        
-        // Look specifically for the full access message on Nature
-        const fullAccessText = 'You have full access to this article via your institution';
-        const hasFullAccess = pageText.toLowerCase().includes(fullAccessText.toLowerCase());
-        
-        if (hasFullAccess) {
-            console.log('[hasInstitutionalAccess] Found Nature full access message:', fullAccessText);
-            return true;
-        }
-        
-        // Log a sample of the page text to debug
-        console.log('[hasInstitutionalAccess] Nature page text sample:', 
-            pageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
-    }
-    
-
-    
     // Get institution details from config with defaults
     const instName = (config.institutionName || 'Institution').toLowerCase();
     const configDomain = (config.institutionDomain || 'example.edu').toLowerCase();
@@ -206,7 +137,7 @@ async function hasInstitutionalAccess(config) {
     console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
     // Special case for Financial Times (ft.com)
-    if (domain.includes('ft.com')) {
+    if (currentHostname.includes('ft.com')) {
         console.log('[hasInstitutionalAccess] Financial Times website detected, performing detailed check');
         
         // Check if we need to wait for content to load
@@ -313,36 +244,11 @@ async function hasInstitutionalAccess(config) {
             noAccess = true;
         }
         
-        // Check for institutional access indicators in the header
-        const headerElements = document.querySelectorAll('header, .o-header, .o-header__row, .o-header__top');
-        let headerText = '';
-        
-        headerElements.forEach(el => {
-            headerText += ' ' + (el.textContent || '');
-        });
-        
-        headerText = headerText.toLowerCase().trim();
-        console.log('[hasInstitutionalAccess] FT header text:', headerText);
-        
-        // Check for institutional indicators in header
-        const instIndicators = [instName, configDomain, shortName, libraryName];
-        const headerHasInst = instIndicators.some(indicator => {
-            if (indicator && headerText.includes(indicator.toLowerCase())) {
-                console.log(`[hasInstitutionalAccess] Found institutional indicator in FT header: ${indicator}`);
-                return true;
-            }
-            return false;
-        });
-        
         // If we have clear indicators of access, return true
-        if ((hasAccess && !noAccess) || headerHasInst) {
+        if (hasAccess && !noAccess) {
             console.log('[hasInstitutionalAccess] Detected institutional access on FT based on page elements');
             return true;
         }
-        
-        // Log a sample of the page text to debug
-        console.log('[hasInstitutionalAccess] FT page text sample:', 
-            pageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
     }
     
     // Check for common indicators of institutional access
@@ -351,7 +257,7 @@ async function hasInstitutionalAccess(config) {
         'access provided by',
         'authenticated via',
         'logged in as',
-        'institution:',
+        'institutional access',
         'institution=',
         `institution=${instName}`,
         `institution=${configDomain}`,
@@ -376,18 +282,6 @@ async function hasInstitutionalAccess(config) {
     } else if (instName) {
         // Fallback to institution name + libraries
         accessIndicators.push(`${instName} libraries`);
-    }
-    
-    // Add any domain-specific indicators
-    if (configDomain) {
-        const domainParts = configDomain.split('.');
-        if (domainParts.length >= 2) {
-            // For domains like 'wwu.edu', add 'wwu libraries'
-            const subdomain = domainParts[0];
-            if (subdomain && subdomain !== 'www' && !libraryName) {
-                accessIndicators.push(`${subdomain} libraries`);
-            }
-        }
     }
     
     // Add any custom indicators from config
@@ -420,69 +314,6 @@ async function hasInstitutionalAccess(config) {
         return false;
     });
     
-    // Additional pattern matching for access messages that might appear in different formats
-    if (!hasIndicator) {
-        // Common patterns for full access messages
-        const accessPatterns = [
-            /full\s+access\s+(?:to|for|available|provided)\s+(?:this|the|your)/i,
-            /you\s+have\s+access\s+(?:to|for|via|through)/i,
-            /access\s+(?:provided|available|granted)\s+(?:by|via|through)\s+(?:your|the)\s+institution/i,
-            /(?:your|this)\s+institution\s+(?:has|provides|grants)\s+access/i
-        ];
-        
-        const hasAccessPattern = accessPatterns.some(pattern => {
-            const match = normalizedPageText.match(pattern);
-            if (match) {
-                foundIndicators.push(`pattern: ${match[0]}`);
-                console.log(`[hasInstitutionalAccess] Found access pattern: ${match[0]}`);
-                return true;
-            }
-            return false;
-        });
-        
-        if (hasAccessPattern) {
-            return true;
-        }
-    }
-    
-    // Special check for indicators in the page header
-    // This is more reliable for detecting institutional access
-    if (!hasIndicator) {
-        console.log('[hasInstitutionalAccess] Checking page header for institutional indicators...');
-        
-        // Get header elements (first 1000px of page content is likely to be header)
-        const headerElements = Array.from(document.querySelectorAll('header, nav, .header, #header, [role="banner"], .banner, .navbar, .navigation'));
-        
-        // Also include any elements in the top portion of the page
-        const topElements = Array.from(document.querySelectorAll('*')).filter(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.top >= 0 && rect.top <= 200 && rect.height > 0 && rect.width > 0;
-        });
-        
-        // Combine and get text content
-        const headerTexts = [...headerElements, ...topElements].map(el => el.textContent?.toLowerCase() || '');
-        const headerText = headerTexts.join(' ');
-        
-        console.log('[hasInstitutionalAccess] Header text sample:', 
-            headerText.substring(0, 200).replace(/\s+/g, ' ').trim() + '...');
-        
-        // Check header text for institutional indicators
-        const headerIndicator = accessIndicators.some(indicator => {
-            if (!indicator) return false;
-            const found = headerText.includes(indicator.toLowerCase());
-            if (found) {
-                foundIndicators.push(`header: ${indicator}`);
-                return true;
-            }
-            return false;
-        });
-        
-        if (headerIndicator) {
-            console.log('[hasInstitutionalAccess] Found access indicators in header:', foundIndicators);
-            return true;
-        }
-    }
-    
     if (foundIndicators.length > 0) {
         console.log('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
         return true;
@@ -499,95 +330,6 @@ async function hasInstitutionalAccess(config) {
                    text.includes('institutional login');
         })
     ];
-    
-    // Check for institution logo or branding images
-    // Build selectors based on institution name and domain
-    const logoSelectors = [];
-    
-    // Add selectors based on domain (e.g., 'wwu' from 'wwu.edu')
-    if (configDomain) {
-        const domainParts = configDomain.split('.');
-        if (domainParts.length >= 2) {
-            const subdomain = domainParts[0];
-            if (subdomain && subdomain !== 'www') {
-                logoSelectors.push(`img[src*="${subdomain}" i]`);
-                logoSelectors.push(`img[alt*="${subdomain}" i]`);
-            }
-        }
-    }
-    
-    // Add selectors based on institution name
-    if (instName) {
-        // Split institution name into words
-        const nameWords = instName.split(/\s+/);
-        
-        // Add selectors for each significant word (3+ characters)
-        nameWords.forEach(word => {
-            if (word.length >= 3) {
-                logoSelectors.push(`img[src*="${word}" i]`);
-                logoSelectors.push(`img[alt*="${word}" i]`);
-            }
-        });
-        
-        // Add selector for short name if available
-        if (shortName) {
-            logoSelectors.push(`img[src*="${shortName}" i]`);
-            logoSelectors.push(`img[alt*="${shortName}" i]`);
-        }
-    }
-    
-    // If we have selectors, check for matching images
-    if (logoSelectors.length > 0) {
-        const selector = logoSelectors.join(', ');
-        console.log(`[hasInstitutionalAccess] Checking for logo with selector: ${selector}`);
-        
-        const logoElements = Array.from(document.querySelectorAll(selector));
-        if (logoElements.length > 0) {
-            console.log(`[hasInstitutionalAccess] Found ${logoElements.length} institution logo/branding elements:`, 
-                logoElements.map(el => ({ src: el.src, alt: el.alt })));
-            return true;
-        }
-    }
-    
-    // Check for access buttons or links that indicate the user already has access
-    const accessButtonTexts = [
-        'full text',
-        'pdf',
-        'html full text',
-        'download pdf',
-        'view full text',
-        'read article',
-        'access article',
-        'read full article',
-        'download article'
-    ];
-    
-    // Look for buttons or links with these texts that don't have 'login' or 'sign in' nearby
-    const accessButtons = Array.from(document.querySelectorAll('a, button')).filter(el => {
-        const text = el.textContent?.toLowerCase().trim() || '';
-        const hasAccessText = accessButtonTexts.some(btnText => text.includes(btnText));
-        
-        if (hasAccessText) {
-            // Check if this is not a login button
-            const hasLoginText = text.includes('login') || text.includes('sign in') || 
-                               text.includes('subscribe') || text.includes('purchase');
-            
-            // Also check parent elements for login context
-            const parent = el.parentElement;
-            const parentText = parent?.textContent?.toLowerCase() || '';
-            const parentHasLoginText = parentText.includes('login') || parentText.includes('sign in') || 
-                                     parentText.includes('subscribe') || parentText.includes('purchase');
-            
-            return !hasLoginText && !parentHasLoginText;
-        }
-        return false;
-    });
-    
-    if (accessButtons.length > 0) {
-        console.log(`[hasInstitutionalAccess] Found ${accessButtons.length} access buttons/links:`, 
-            accessButtons.map(el => el.textContent?.trim()));
-        return true;
-    }
     
     if (ezproxyElements.length > 0) {
         console.log(`[hasInstitutionalAccess] Found ${ezproxyElements.length} EZProxy related elements`);
@@ -664,9 +406,8 @@ async function updateExtensionIcon(domain, isDismissed) {
 }
 
 async function dismissDomain(domain) {
-    console.log('Dismissing domain:', domain);
     try {
-        // Save the dismissed domain to storage
+        console.log('Dismissing domain:', domain);
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         
@@ -681,62 +422,65 @@ async function dismissDomain(domain) {
             dismissedDomains.push(domain);
             console.log('Saving dismissed domains:', dismissedDomains);
             await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
-            
-            // Notify the background script to update the icon
-            try {
-                // First try to get the current tab ID
-                let tabId;
-                
-                // Method 1: Try using chrome.tabs if available
-                if (chrome.tabs && chrome.tabs.query) {
-                    try {
-                        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-                        if (tabs && tabs[0]?.id) {
-                            tabId = tabs[0].id;
-                        }
-                    } catch (e) {
-                        console.warn('Could not get tab ID using chrome.tabs:', e);
-                    }
-                }
-                
-                // Method 2: If we couldn't get tabId, use a message to the background script
-                if (!tabId) {
-                    console.log('No tab ID available, using background script to update icon');
-                    await chrome.runtime.sendMessage({
-                        action: 'dismissDomain',
-                        domain: domain
-                    });
-                } else {
-                    console.log('Updating icon for tab:', tabId);
-                    // Update the icon directly if we have the tab ID
-                    await chrome.runtime.sendMessage({
-                        action: 'updateIcon',
-                        tabId: tabId,
-                        isDismissed: true
-                    });
-                    
-                    // Update badge if available
-                    if (chrome.action && chrome.action.setBadgeText) {
-                        try {
-                            await chrome.action.setBadgeText({
-                                tabId: tabId,
-                                text: 'X'
-                            });
-                            await chrome.action.setBadgeBackgroundColor({
-                                tabId: tabId,
-                                color: '#dc3545' // Red color
-                            });
-                        } catch (e) {
-                            console.warn('Could not update badge:', e);
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('Error updating icon:', e);
-            }
         }
+        
+        // Notify the background script to update the icon
+        try {
+            // First try to get the current tab ID
+            let tabId;
+            
+            // Method 1: Try using chrome.tabs if available
+            if (chrome.tabs && chrome.tabs.query) {
+                try {
+                    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (tabs && tabs[0]?.id) {
+                        tabId = tabs[0].id;
+                    }
+                } catch (e) {
+                    console.warn('Could not get tab ID using chrome.tabs:', e);
+                }
+            }
+            
+            // Method 2: If we couldn't get tabId, use a message to the background script
+            if (!tabId) {
+                console.log('No tab ID available, using background script to update icon');
+                await chrome.runtime.sendMessage({
+                    action: 'dismissDomain',
+                    domain: domain
+                });
+            } else {
+                console.log('Updating icon for tab:', tabId);
+                // Update the icon directly if we have the tab ID
+                await chrome.runtime.sendMessage({
+                    action: 'updateIcon',
+                    tabId: tabId,
+                    isDismissed: true
+                });
+                
+                // Update badge if available
+                if (chrome.action && chrome.action.setBadgeText) {
+                    try {
+                        await chrome.action.setBadgeText({
+                            tabId: tabId,
+                            text: 'X'
+                        });
+                        await chrome.action.setBadgeBackgroundColor({
+                            tabId: tabId,
+                            color: '#dc3545' // Red color
+                        });
+                    } catch (e) {
+                        console.warn('Could not update badge:', e);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error updating icon:', e);
+        }
+        
+        return true;
     } catch (error) {
         console.error('Error saving dismissed domain:', error);
+        return false;
     }
 }
 
@@ -1214,20 +958,12 @@ async function checkAndShowBanner(url) {
         
         // Step 5: Check if domain is dismissed
         console.log('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
-        // Check both the matched domain and the current domain
-        const isDismissed = await isDomainDismissed(domain).catch(err => {
+        const isDismissed = await isDomainDismissed(matchedDomain).catch(err => {
             console.error('[checkAndShowBanner] Error checking if domain is dismissed:', err);
             return false; // Default to not dismissed on error
         });
         
-        // Double check with the matched domain from the list if needed
-        let isMatchedDomainDismissed = false;
-        if (!isDismissed && matchedDomain !== domain) {
-            isMatchedDomainDismissed = await isDomainDismissed(matchedDomain).catch(() => false);
-            console.log(`[checkAndShowBanner] Matched domain ${matchedDomain} dismissed status:`, isMatchedDomainDismissed);
-        }
-        
-        if (isDismissed || isMatchedDomainDismissed) {
+        if (isDismissed) {
             console.log('[checkAndShowBanner] Domain is dismissed, updating icon to dismissed state');
             try {
                 const [tab] = await chrome.runtime.sendMessage({ action: 'getTab' });
@@ -1261,11 +997,8 @@ async function checkAndShowBanner(url) {
         
         // Step 7: Double-check if domain was dismissed (race condition protection)
         console.log('[checkAndShowBanner] Step 7: Verifying domain is still not dismissed...');
-        const isStillDismissed = await isDomainDismissed(domain).catch(() => false);
-        const isMatchedStillDismissed = matchedDomain !== domain ? 
-            await isDomainDismissed(matchedDomain).catch(() => false) : false;
-            
-        if (isStillDismissed || isMatchedStillDismissed) {
+        const isStillDismissed = await isDomainDismissed(matchedDomain).catch(() => false);
+        if (isStillDismissed) {
             console.log('[checkAndShowBanner] Domain was dismissed during processing, aborting');
             return;
         }
@@ -1381,34 +1114,78 @@ if (document.readyState === 'loading') {
 }
 
 // Enhanced message listener with auto-redirect support
-chrome.runtime.onMessage.addListener(async (message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'DOMAIN_MATCH') {
-        // Check if user has institutional access
-        // Get the current configuration
-        const config = await getConfig();
-        if (hasInstitutionalAccess(config)) {
-            console.log('User has institutional access, skipping EZProxy notification');
-            return;
-        }
-
-        // Check if domain was previously dismissed
-        if (await isDomainDismissed(message.domain)) {
-            console.log('Domain was previously dismissed, skipping notification');
-            return;
-        }
-
-        // Check for auto-redirect setting
-        if (await shouldAutoRedirect()) {
-            console.log('Auto-redirect enabled, redirecting to EZProxy');
-            window.location.href = message.ezproxyUrl;
-            return;
-        }
-
-        // Show banner notification
-        createBanner(
-            message.bannerMessage || `This resource is available through WWU Libraries. Access the full content via EZProxy.`,
-            message.ezproxyUrl,
-            message.domain
-        );
+        console.log('[onMessage] Received DOMAIN_MATCH message for:', message.domain);
+        
+        // Process the message asynchronously but respond immediately
+        // to prevent connection issues
+        sendResponse({ received: true });
+        
+        // Use a promise chain to handle all the checks in sequence
+        getConfig()
+            .then(config => {
+                // Store the config for later use
+                const configData = config;
+                
+                // First check if the domain was dismissed
+                return isDomainDismissed(message.domain)
+                    .then(dismissed => {
+                        if (dismissed) {
+                            console.log('[onMessage] Domain was previously dismissed, skipping notification');
+                            throw new Error('DOMAIN_DISMISSED');
+                        }
+                        return configData;
+                    });
+            })
+            .then(config => {
+                // Then check for institutional access
+                return hasInstitutionalAccess(config)
+                    .then(hasAccess => {
+                        if (hasAccess) {
+                            console.log('[onMessage] User has institutional access, skipping EZProxy notification');
+                            throw new Error('HAS_INSTITUTIONAL_ACCESS');
+                        }
+                        return config;
+                    })
+                    .catch(err => {
+                        if (err.message === 'HAS_INSTITUTIONAL_ACCESS') {
+                            throw err;
+                        }
+                        // If there's an error checking access, continue with banner
+                        console.warn('[onMessage] Error checking institutional access, proceeding with banner:', err);
+                        return config;
+                    });
+            })
+            .then(config => {
+                // Then check for auto-redirect
+                return shouldAutoRedirect()
+                    .then(shouldRedirect => {
+                        if (shouldRedirect) {
+                            console.log('[onMessage] Auto-redirect enabled, redirecting to EZProxy');
+                            window.location.href = message.ezproxyUrl;
+                            throw new Error('AUTO_REDIRECTED');
+                        }
+                        return config;
+                    });
+            })
+            .then(config => {
+                // Finally, show the banner
+                console.log('[onMessage] Showing banner for:', message.domain);
+                createBanner(
+                    message.bannerMessage || `This resource is available through ${config.institutionLibraryName || 'your library'}. Access the full content via EZProxy.`,
+                    message.ezproxyUrl,
+                    message.domain
+                );
+            })
+            .catch(err => {
+                // These are expected flow control errors, not actual errors
+                if (!['DOMAIN_DISMISSED', 'HAS_INSTITUTIONAL_ACCESS', 'AUTO_REDIRECTED'].includes(err.message)) {
+                    console.error('[onMessage] Error processing domain match:', err);
+                }
+            });
+        
+        // Return true to indicate we'll handle this asynchronously
+        return true;
     }
 });
