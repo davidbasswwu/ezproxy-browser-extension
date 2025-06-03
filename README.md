@@ -42,7 +42,7 @@ See the comments in `config.json` for more details on each option.
 
 ### To install
 Until this becomes available in the Chrome Extension store, clone the repository or download the zip file from the releases page.  
-Load the unpacked extension in Chrome by going to chrome://extensions/ and clicking the "Load unpacked" button.  Choose "dist" folder.
+Load the unpacked extension in Chrome by going to chrome://extensions/ and clicking the "Load unpacked" button.  Choose the "dist" folder.
 
 ### What's Next?
 See the [TODO.md](TODO.md) file for a list of things that need to be done.
