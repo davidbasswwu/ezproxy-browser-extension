@@ -113,11 +113,64 @@ async function hasInstitutionalAccess(config) {
         return false;
     }
     
-    // Get page text safely
-    const pageText = document.body?.textContent || document.documentElement?.textContent || '';
+    // Enhanced page text extraction with multiple methods
+    let pageText = '';
+    
+    try {
+        // Method 1: Direct textContent extraction
+        pageText = document.body?.textContent || document.documentElement?.textContent || '';
+        
+        // Method 2: If text is empty or very short, try getting text from main content areas
+        if (!pageText || pageText.length < 100) {
+            console.log('[hasInstitutionalAccess] Direct text extraction yielded limited content, trying content areas');
+            const contentSelectors = [
+                'main', 'article', '.content', '.article', '#content', '#main', 
+                '[role="main"]', '[role="article"]', '.page-content'
+            ];
+            
+            for (const selector of contentSelectors) {
+                const elements = document.querySelectorAll(selector);
+                if (elements && elements.length > 0) {
+                    for (const element of elements) {
+                        pageText += ' ' + (element.textContent || '');
+                    }
+                }
+            }
+        }
+        
+        // Method 3: If still empty, try getting text from all paragraphs
+        if (!pageText || pageText.length < 100) {
+            console.log('[hasInstitutionalAccess] Content area extraction yielded limited content, trying paragraphs');
+            const paragraphs = document.querySelectorAll('p');
+            if (paragraphs && paragraphs.length > 0) {
+                for (const p of paragraphs) {
+                    pageText += ' ' + (p.textContent || '');
+                }
+            }
+        }
+        
+        // Method 4: If still empty, try getting text from all divs with substantial content
+        if (!pageText || pageText.length < 100) {
+            console.log('[hasInstitutionalAccess] Paragraph extraction yielded limited content, trying divs');
+            const divs = document.querySelectorAll('div');
+            if (divs && divs.length > 0) {
+                for (const div of divs) {
+                    if (div.textContent && div.textContent.length > 50) {
+                        pageText += ' ' + div.textContent;
+                    }
+                }
+            }
+        }
+        
+        // Clean up the text
+        pageText = pageText.trim();
+    } catch (error) {
+        console.error('[hasInstitutionalAccess] Error extracting page text:', error);
+    }
+    
     if (!pageText) {
-        console.warn('[hasInstitutionalAccess] Could not get page text');
-        return false;
+        console.warn('[hasInstitutionalAccess] Could not get page text after multiple extraction attempts');
+        // Don't return false immediately - continue with other checks
     }
     
     // Get current domain
@@ -142,6 +195,8 @@ async function hasInstitutionalAccess(config) {
             pageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
     }
     
+
+    
     // Get institution details from config with defaults
     const instName = (config.institutionName || 'Institution').toLowerCase();
     const configDomain = (config.institutionDomain || 'example.edu').toLowerCase();
@@ -149,6 +204,146 @@ async function hasInstitutionalAccess(config) {
     const libraryName = (config.institutionLibraryName || '').toLowerCase();
     
     console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
+    
+    // Special case for Financial Times (ft.com)
+    if (domain.includes('ft.com')) {
+        console.log('[hasInstitutionalAccess] Financial Times website detected, performing detailed check');
+        
+        // Check if we need to wait for content to load
+        const needsDelay = !pageText || pageText.length < 1000;
+        if (needsDelay) {
+            console.log('[hasInstitutionalAccess] FT content may not be fully loaded, adding delay checks');
+            
+            // Set a flag in sessionStorage to prevent infinite loops
+            const checkCount = parseInt(sessionStorage.getItem('ft-check-count') || '0');
+            if (checkCount < 3) { // Limit to 3 attempts
+                // Increment the counter
+                sessionStorage.setItem('ft-check-count', (checkCount + 1).toString());
+                
+                // Set a timeout to check again after content has had time to load
+                setTimeout(() => {
+                    console.log(`[hasInstitutionalAccess] Retrying FT check (attempt ${checkCount + 1}/3)`);
+                    // Force a recheck
+                    hasInstitutionalAccess(config);
+                }, 1500); // 1.5 second delay
+                
+                // Return false for now, the timeout will trigger another check
+                return false;
+            } else {
+                // Reset the counter after 3 attempts
+                sessionStorage.removeItem('ft-check-count');
+                console.log('[hasInstitutionalAccess] Maximum FT check attempts reached, proceeding with current content');
+            }
+        } else {
+            // Content seems to be loaded, reset the counter
+            sessionStorage.removeItem('ft-check-count');
+        }
+        
+        // Check for specific FT access elements
+        const ftAccessIndicators = [
+            // Check for subscription/access buttons that indicate no institutional access
+            { selector: '.o-header__top-link--subscribe', negative: true, description: 'Subscribe button' },
+            { selector: '.o-header__top-button--primary', negative: true, description: 'Sign In button' },
+            { selector: '.o-banner__outer', negative: true, description: 'Subscription banner' },
+            { selector: '.n-messaging-banner', negative: true, description: 'Messaging banner' },
+            { selector: '.n-messaging-banner__content', negative: true, description: 'Messaging banner content' },
+            { selector: '.o-message', negative: true, description: 'Message component' },
+            { selector: '.o-message__content-main', negative: true, description: 'Message content' },
+            { selector: '.o-message__actions', negative: true, description: 'Message actions' },
+            
+            // Check for elements that indicate institutional access
+            { selector: '.n-myft-ui--follow', negative: false, description: 'MyFT follow button (requires access)' },
+            { selector: '.article__content', negative: false, description: 'Full article content' },
+            { selector: '.n-content-body', negative: false, description: 'Article body content' },
+            { selector: '.article-body', negative: false, description: 'Article body' },
+            { selector: '.js-article__content', negative: false, description: 'JS article content' },
+            { selector: '.js-article-body', negative: false, description: 'JS article body' },
+            { selector: '.article__content-body', negative: false, description: 'Article content body' }
+        ];
+        
+        let hasAccess = false;
+        let noAccess = false;
+        
+        for (const indicator of ftAccessIndicators) {
+            const elements = document.querySelectorAll(indicator.selector);
+            if (elements && elements.length > 0) {
+                console.log(`[hasInstitutionalAccess] Found FT ${indicator.description}: ${elements.length} elements`);
+                
+                if (indicator.negative) {
+                    // If this is a negative indicator (like subscribe button), it suggests no access
+                    noAccess = true;
+                } else {
+                    // If this is a positive indicator, it suggests access
+                    hasAccess = true;
+                }
+            }
+        }
+        
+        // Check for paywall messaging
+        const paywallText = [
+            'subscribe to read', 
+            'to continue reading', 
+            'premium content', 
+            'subscribe to the ft',
+            'subscribe to continue reading',
+            'start your trial',
+            'free trial',
+            'sign up to',
+            'sign in to',
+            'subscription required',
+            'please subscribe',
+            'for unlimited access',
+            'to unlock this article',
+            'to access this article',
+            'already a subscriber? sign in',
+            'already a subscriber? log in'
+        ];
+        
+        const hasPaywall = paywallText.some(text => {
+            const found = pageText.toLowerCase().includes(text);
+            if (found) {
+                console.log(`[hasInstitutionalAccess] Found FT paywall text: "${text}"`);
+                return true;
+            }
+            return false;
+        });
+        
+        if (hasPaywall) {
+            console.log('[hasInstitutionalAccess] Detected paywall content on FT');
+            noAccess = true;
+        }
+        
+        // Check for institutional access indicators in the header
+        const headerElements = document.querySelectorAll('header, .o-header, .o-header__row, .o-header__top');
+        let headerText = '';
+        
+        headerElements.forEach(el => {
+            headerText += ' ' + (el.textContent || '');
+        });
+        
+        headerText = headerText.toLowerCase().trim();
+        console.log('[hasInstitutionalAccess] FT header text:', headerText);
+        
+        // Check for institutional indicators in header
+        const instIndicators = [instName, configDomain, shortName, libraryName];
+        const headerHasInst = instIndicators.some(indicator => {
+            if (indicator && headerText.includes(indicator.toLowerCase())) {
+                console.log(`[hasInstitutionalAccess] Found institutional indicator in FT header: ${indicator}`);
+                return true;
+            }
+            return false;
+        });
+        
+        // If we have clear indicators of access, return true
+        if ((hasAccess && !noAccess) || headerHasInst) {
+            console.log('[hasInstitutionalAccess] Detected institutional access on FT based on page elements');
+            return true;
+        }
+        
+        // Log a sample of the page text to debug
+        console.log('[hasInstitutionalAccess] FT page text sample:', 
+            pageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
+    }
     
     // Check for common indicators of institutional access
     const accessIndicators = [
@@ -688,10 +883,18 @@ async function createBanner(message, ezproxyUrl, domain) {
     // Check if this is an exception domain and use appropriate button text
     const isExceptionDomain = sessionStorage.getItem('ezproxy-exception-domain') === 'true';
     if (isExceptionDomain) {
-        redirectButton.textContent = 'Get Library Help';
-        redirectButton.setAttribute('aria-label', 'Get help from your library for accessing this resource');
-        // Clear the flag after using it
+        // Use the stored button text or fallback to default
+        const exceptionButtonText = sessionStorage.getItem('ezproxy-exception-button-text') || 'How to Access';
+        const exceptionButtonAriaLabel = sessionStorage.getItem('ezproxy-exception-button-aria') || 
+            'Learn how to access this resource through your library';
+        
+        redirectButton.textContent = exceptionButtonText;
+        redirectButton.setAttribute('aria-label', exceptionButtonAriaLabel);
+        
+        // Clear the session storage items after using them
         sessionStorage.removeItem('ezproxy-exception-domain');
+        sessionStorage.removeItem('ezproxy-exception-button-text');
+        sessionStorage.removeItem('ezproxy-exception-button-aria');
     } else {
         redirectButton.textContent = buttonConfig.text || 'Access via EZProxy';
         redirectButton.setAttribute('aria-label', 'Access this resource via EZProxy');
@@ -1087,22 +1290,32 @@ async function checkAndShowBanner(url) {
         }
         
         // Check if the domain is in the exceptions list
-        const isException = Array.isArray(config.urlExceptions) && 
-            config.urlExceptions.some(exception => matchedDomain.includes(exception));
+        const matchedExceptionDomain = Array.isArray(config.urlExceptions) ? 
+            config.urlExceptions.find(exception => matchedDomain.includes(exception)) : null;
+        const isException = !!matchedExceptionDomain;
         
         let ezproxyUrl;
         let bannerMessage;
+        let buttonText;
+        let buttonAriaLabel;
         
         if (isException) {
             // For exceptions, create a URL to the library help page with the domain as a search parameter
             const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
             const helpUrlWithSearch = `${libraryHelpUrl}${libraryHelpUrl.includes('?') ? '&' : '?'}q=${matchedDomain}`;
             ezproxyUrl = helpUrlWithSearch;
-            bannerMessage = `This resource requires special access. Please contact ${config.institutionName || 'your library'} for assistance.`;
-            console.log(`[checkAndShowBanner] Domain ${matchedDomain} is an exception. Using help URL:`, ezproxyUrl);
             
-            // Store the exception flag to modify the button text later
+            // Create a more specific message for the exception domain
+            bannerMessage = `${matchedExceptionDomain} requires special access and cannot be accessed via standard EZProxy. Please visit your library's help page for assistance.`;
+            buttonText = 'How to Access';
+            buttonAriaLabel = 'Learn how to access this resource through your library';
+            
+            console.log(`[checkAndShowBanner] Domain ${matchedDomain} is an exception (${matchedExceptionDomain}). Using help URL:`, ezproxyUrl);
+            
+            // Store the exception information to modify the banner later
             sessionStorage.setItem('ezproxy-exception-domain', 'true');
+            sessionStorage.setItem('ezproxy-exception-button-text', buttonText);
+            sessionStorage.setItem('ezproxy-exception-button-aria', buttonAriaLabel);
         } else {
             // Standard EZProxy URL creation
             ezproxyUrl = `${ezproxyBase}${targetUrl}`;
