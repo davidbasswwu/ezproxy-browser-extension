@@ -5,7 +5,7 @@
     "institutionDomain": "wwu.edu",
     "institutionShortName": "WWU",
     "institutionLibraryName": "WWU Libraries",
-    "libraryHelpUrl": "https://askus.library.wwu.edu/",
+    "libraryHelpUrl": "https://askus.library.wwu.edu/search/?q=",
     "updateInterval": 86400000, 
     "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
     "retryAttempts": 3,
@@ -36,6 +36,9 @@
         "ft.com"
     ],
     "_comment_urlExceptions": "Domains that require special handling for EZProxy access. For these domains, users will be redirected to the libraryHelpUrl instead of the standard EZProxy URL.",
+    
+    "secondaryHelpButtonText": "Info for this site",
+    "_comment_secondaryHelpButtonText": "Text for the button that appears on EZProxy pages for exception domains, linking to help information",
     
     "banner": {
         "backgroundColor": "#f8f9fa",
