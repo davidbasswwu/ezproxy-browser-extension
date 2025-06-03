@@ -35,4 +35,4 @@ Load the unpacked extension in Chrome by going to chrome://extensions/ and click
 See the [TODO.md](TODO.md) file for a list of things that need to be done.
 
 ### Credits
-Idea and initial implementation by David Bass at WWU with a *lot* of help from Windsurf, Claude and SWE-1.
+Idea and initial implementation by David Bass at WWU with a *lot* of help from Cursor, Windsurf, Anthropic, OpenAI and SWE-1.
