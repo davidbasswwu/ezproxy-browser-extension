@@ -37,6 +37,9 @@
     ],
     "_comment_urlExceptions": "Domains that require special handling for EZProxy access. For these domains, users will be redirected to the libraryHelpUrl instead of the standard EZProxy URL.",
     
+    "secondaryHelpButtonText": "Info for this site",
+    "_comment_secondaryHelpButtonText": "Text for the button that appears on EZProxy pages for exception domains, linking to help information",
+    
     "banner": {
         "backgroundColor": "#f8f9fa",
         "textColor": "#495057",

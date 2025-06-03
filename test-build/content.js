@@ -2,6 +2,7 @@
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
+const SECONDARY_BANNER_ID = 'ezproxy-secondary-banner';
 const STORAGE_KEYS = {
     DISMISSED_DOMAINS: 'ezproxy-dismissed-domains',
     AUTO_REDIRECT: 'ezproxy-auto-redirect'
@@ -55,6 +56,45 @@ async function getConfig() {
             accessIndicators: ['access provided by', 'authenticated via', 'logged in as'],
             bannerMessage: 'This resource is available through your institution. Access the full content via EZProxy.'
         };
+    }
+}
+
+/**
+ * Gets the domain list from the local file
+ * @returns {Promise<Array>} Array of domains
+ */
+async function getDomainList() {
+    try {
+        console.log('Fetching domain list...');
+        const url = chrome.runtime.getURL('domain-list.json');
+        console.log('Domain list URL:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch domain list: ${response.status} ${response.statusText}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.warn('Unexpected content type:', contentType);
+        }
+        
+        const data = await response.json();
+        console.log('Domain list loaded successfully, entries:', data.length);
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        console.error('Error loading domain list:', error);
+        // Try to load a backup list from storage
+        try {
+            const result = await chrome.storage.local.get('ezproxy-domain-list-backup');
+            const backupList = result['ezproxy-domain-list-backup'];
+            console.log('Using backup domain list from storage:', backupList ? backupList.length : 0, 'entries');
+            return Array.isArray(backupList) ? backupList : [];
+        } catch (storageError) {
+            console.error('Failed to load backup domain list:', storageError);
+            return [];
+        }
     }
 }
 
@@ -845,10 +885,316 @@ async function removeBanner() {
 }
 
 /**
+ * Check if current URL is an EZProxy URL for an exception domain
+ * @param {Object} config - The configuration object
+ * @returns {Object|null} - Object with original domain if match found, null otherwise
+ */
+function checkEZProxyExceptionURL(config) {
+    const currentUrl = window.location.href;
+    const currentHostname = window.location.hostname;
+    
+    // Check if we're on an EZProxy domain
+    if (!config.ezproxyBaseUrl || !currentHostname.includes(config.ezproxyBaseUrl)) {
+        return null;
+    }
+    
+    // Parse the EZProxy URL format to extract the original domain
+    // Format is typically: https://www-example-com.ezproxy.library.wwu.edu/path
+    const ezproxyPattern = new RegExp(`^([^.]+)\\.${config.ezproxyBaseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+    const match = currentHostname.match(ezproxyPattern);
+    
+    if (!match) {
+        return null;
+    }
+    
+    // Convert the transformed domain back to original format
+    // www-example-com -> www.example.com
+    const transformedDomain = match[1];
+    const originalDomain = transformedDomain.replace(/-/g, '.');
+    
+    // Check if this original domain is in our exception list
+    if (config.urlExceptions && Array.isArray(config.urlExceptions)) {
+        const matchedExceptionDomain = config.urlExceptions.find(exception => 
+            originalDomain.includes(exception) || originalDomain === exception
+        );
+        
+        if (matchedExceptionDomain) {
+            return {
+                originalDomain: originalDomain,
+                exceptionDomain: matchedExceptionDomain
+            };
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Utility to extract the base domain (e.g., ft.com) from a hostname (e.g., www.ft.com)
+ * @param {string} hostname
+ * @returns {string} base domain
+ */
+function getBaseDomain(hostname) {
+    // Remove port if present
+    hostname = hostname.split(':')[0];
+    // Split by dot
+    const parts = hostname.split('.');
+    if (parts.length <= 2) {
+        return hostname;
+    }
+    // Return last two parts (handles most cases like www.ft.com -> ft.com)
+    return parts.slice(-2).join('.');
+}
+
+/**
+ * Create secondary help banner for EZProxy exception domains
+ * @param {string} originalDomain - The original domain name
+ * @param {string} helpUrl - The help URL with search parameter
+ * @param {string} buttonText - Text for the help button
+ */
+async function createSecondaryBanner(originalDomain, helpUrl, buttonText) {
+    const config = await getConfig();
+    const bannerConfig = config.banner || {};
+    
+    // Remove existing secondary banner if any
+    const existingBanner = document.getElementById(SECONDARY_BANNER_ID);
+    if (existingBanner) {
+        existingBanner.remove();
+    }
+
+    // Create secondary banner elements
+    const banner = document.createElement('div');
+    banner.id = SECONDARY_BANNER_ID;
+    banner.setAttribute('role', 'banner');
+    banner.setAttribute('aria-label', 'Library help information');
+    
+    // Base styles - similar to main banner but with different colors
+    const baseStyles = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background-color: #e8f4f8;
+        color: #155e75;
+        border-bottom: 1px solid #0891b2;
+        padding: ${bannerConfig.padding || '12px 20px'};
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: ${bannerConfig.zIndex || '2147483647'};
+        font-family: ${bannerConfig.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'};
+        box-shadow: ${bannerConfig.boxShadow || '0 2px 4px rgba(0,0,0,0.1)'};
+        font-size: ${bannerConfig.fontSize || '14px'};
+        line-height: ${bannerConfig.lineHeight || '1.5'};
+    `;
+    
+    // Add animation styles if motion is not reduced
+    const animationStyles = prefersReducedMotion ? '' : `
+        transform: translateY(-100%);
+        transition: transform ${bannerConfig.animationDuration || '0.3s'} ease-out;
+    `;
+    
+    banner.style.cssText = baseStyles + animationStyles;
+
+    // Create message div
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'banner-message';
+    messageDiv.textContent = `This site may require additional steps.  Please see the 'Info for this site' button.`;
+    messageDiv.style.cssText = `
+        color: #155e75;
+        flex: 1;
+        margin-right: 15px;
+    `;
+
+    const buttonsDiv = document.createElement('div');
+    buttonsDiv.className = 'banner-buttons';
+    buttonsDiv.style.cssText = `
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    `;
+
+    // Help button
+    const helpButton = document.createElement('button');
+    helpButton.textContent = buttonText;
+    helpButton.setAttribute('aria-label', `Get help information for ${originalDomain}`);
+    
+    // Apply button styles
+    helpButton.style.cssText = `
+        background-color: #0891b2;
+        color: #ffffff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: ${bannerConfig.fontSize || '14px'};
+        font-weight: 500;
+        transition: all 0.2s ease;
+    `;
+    
+    // Add hover and focus styles
+    helpButton.addEventListener('mouseenter', () => {
+        helpButton.style.backgroundColor = '#0e7490';
+        helpButton.style.transform = 'translateY(-1px)';
+    });
+    
+    helpButton.addEventListener('mouseleave', () => {
+        helpButton.style.backgroundColor = '#0891b2';
+        helpButton.style.transform = '';
+    });
+    
+    helpButton.addEventListener('focus', () => {
+        helpButton.style.outline = '2px solid #0e7490';
+        helpButton.style.outlineOffset = '2px';
+    });
+    
+    helpButton.addEventListener('blur', () => {
+        helpButton.style.outline = '';
+        helpButton.style.outlineOffset = '';
+    });
+    
+    helpButton.addEventListener('click', () => {
+        window.open(helpUrl, '_blank');
+    });
+
+    // Close button
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '&times;';
+    closeButton.setAttribute('aria-label', 'Close this notification');
+    
+    closeButton.style.cssText = `
+        background: transparent;
+        border: none;
+        font-size: 20px;
+        font-weight: bold;
+        color: #155e75;
+        cursor: pointer;
+        padding: 0 0 0 10px;
+        line-height: 1;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+    `;
+    
+    closeButton.addEventListener('mouseenter', () => {
+        closeButton.style.backgroundColor = '#cffafe';
+        closeButton.style.transform = 'scale(1.1)';
+    });
+    
+    closeButton.addEventListener('mouseleave', () => {
+        closeButton.style.backgroundColor = 'transparent';
+        closeButton.style.transform = '';
+    });
+    
+    closeButton.addEventListener('focus', () => {
+        closeButton.style.outline = '2px solid #0e7490';
+        closeButton.style.outlineOffset = '2px';
+    });
+    
+    closeButton.addEventListener('blur', () => {
+        closeButton.style.outline = '';
+        closeButton.style.outlineOffset = '';
+    });
+    
+    closeButton.addEventListener('click', removeSecondaryBanner);
+
+    // Keyboard navigation
+    banner.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            removeSecondaryBanner();
+        }
+    });
+
+    // Assemble banner
+    buttonsDiv.appendChild(helpButton);
+    buttonsDiv.appendChild(closeButton);
+    banner.appendChild(messageDiv);
+    banner.appendChild(buttonsDiv);
+
+    // Add banner to page
+    document.body.insertBefore(banner, document.body.firstChild);
+
+    // Animate in if motion is not reduced
+    if (!prefersReducedMotion) {
+        // Force reflow to ensure initial transform is applied
+        banner.offsetHeight;
+        banner.style.transform = 'translateY(0)';
+    }
+
+    // Adjust page margin to prevent content overlap
+    const bannerHeight = banner.offsetHeight;
+    adjustPageMargin(bannerHeight);
+
+    // Set focus to the help button for accessibility
+    setTimeout(() => {
+        helpButton.focus();
+    }, prefersReducedMotion ? 0 : 100);
+}
+
+/**
+ * Remove secondary banner notification
+ */
+async function removeSecondaryBanner() {
+    const banner = document.getElementById(SECONDARY_BANNER_ID);
+    if (!banner) return;
+    
+    const bannerConfig = (await getConfig()).banner || {};
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    
+    if (prefersReducedMotion) {
+        banner.remove();
+        restorePageMargin();
+    } else {
+        banner.style.transition = `transform ${bannerConfig.animationDuration || '0.3s'} ease-out`;
+        banner.style.transform = 'translateY(-100%)';
+        
+        // Use a promise to handle the animation end
+        await new Promise(resolve => {
+            banner.addEventListener('transitionend', () => resolve(), { once: true });
+            // Fallback in case transitionend doesn't fire
+            setTimeout(resolve, bannerConfig.animationDuration ? 
+                (parseFloat(bannerConfig.animationDuration) * 1000) : 300);
+        });
+        
+        banner.remove();
+        restorePageMargin();
+    }
+    
+    // Remove any keyboard focus from banner elements
+    if (document.activeElement && document.activeElement.closest(`#${SECONDARY_BANNER_ID}`)) {
+        document.activeElement.blur();
+    }
+}
+
+/**
  * Initialize the content script
  */
 async function init() {
     if (isInitialized) return;
+    
+    // Check if we're on an EZProxy URL for an exception domain
+    try {
+        const config = await getConfig();
+        const ezproxyMatch = checkEZProxyExceptionURL(config);
+        
+        if (ezproxyMatch) {
+            console.log('[init] Detected EZProxy exception URL for domain:', ezproxyMatch.originalDomain);
+            // Create the help URL with the BASE domain as search parameter
+            const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
+            const baseDomain = getBaseDomain(ezproxyMatch.originalDomain);
+            const helpUrlWithSearch = `${libraryHelpUrl}${libraryHelpUrl.includes('?') ? '&' : '?'}q=${baseDomain}`;
+            // Get the button text from config
+            const buttonText = config.secondaryHelpButtonText || 'Info for this site';
+            // Show the secondary banner
+            await createSecondaryBanner(ezproxyMatch.originalDomain, helpUrlWithSearch, buttonText);
+        }
+    } catch (error) {
+        console.error('[init] Error checking for EZProxy exception URL:', error);
+    }
     
     // Listen for storage changes to update the banner when domains are undismissed
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -1035,7 +1381,8 @@ async function checkAndShowBanner(url) {
         if (isException) {
             // For exceptions, create a URL to the library help page with the domain as a search parameter
             const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
-            const helpUrlWithSearch = `${libraryHelpUrl}${libraryHelpUrl.includes('?') ? '&' : '?'}q=${matchedDomain}`;
+            const baseDomain = getBaseDomain(matchedDomain);
+            const helpUrlWithSearch = `${libraryHelpUrl}${libraryHelpUrl.includes('?') ? '&' : '?'}q=${baseDomain}`;
             ezproxyUrl = helpUrlWithSearch;
             
             // Create a more specific message for the exception domain
