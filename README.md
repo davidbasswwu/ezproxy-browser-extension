@@ -12,20 +12,33 @@ and after the user clicks the button (now on https://www-chronicle-com.ezproxy.l
 ![EZproxy Domain Checker Screenshot](images/chronicle-after.png)
 
 ### Configuration
-The extension can be configured by editing the [config.json](config.json) file.  The following settings are available:
+The extension can be configured by editing the [config.json](config.json) file. The following settings are available:
 
 - `domainListUrl`: The URL of the domain list file
 - `ezproxyBaseUrl`: The base URL of the EZproxy server
 - `institutionName`: The name of the institution
-- `updateInterval`: The interval in milliseconds between updates
-- `retryAttempts`: The number of retry attempts
-- `retryDelay`: The delay in milliseconds between retry attempts
-- `enableAutoRedirect`: Whether to enable auto-redirect
-- `enableUserNotifications`: Whether to enable user notifications
-- `bannerMessage`: The message to display in the banner
+- `institutionDomain`: The institution's domain (e.g., `wwu.edu`)
+- `institutionShortName`: Short name for the institution (e.g., `WWU`)
+- `institutionLibraryName`: The name of the institution's library (e.g., `WWU Libraries`)
+- `libraryHelpUrl`: The URL for library help or support, used for exception domains
+- `updateInterval`: How often (in milliseconds) to update the domain list (default: 86400000 = 24 hours)
+- `retryAttempts`: Number of retry attempts for network requests
+- `retryDelay`: Delay in milliseconds between retry attempts
+- `enableAutoRedirect`: Whether to enable auto-redirect to EZProxy (true/false)
+- `enableUserNotifications`: Whether to show user notifications (true/false)
+- `bannerMessage`: The default message to display in the main banner
 - `version`: The version of the extension
-- `accessIndicators`: The access indicators to look for
-- `banner`: The banner configuration
+- `accessIndicators`: Strings used to detect if a page indicates the user already has institutional access (case-insensitive)
+- `fullAccessIndicators`: Strings indicating the user already has full access and doesn't need EZProxy
+- `urlExceptions`: Domains that require special handling for EZProxy access (e.g., `ft.com`). For these, users are redirected to the `libraryHelpUrl` instead of the standard EZProxy URL.
+- `secondaryHelpButtonText`: Text for the button that appears on EZProxy pages for exception domains, linking to help information (default: "Info for this site")
+- `banner`: Styling and text configuration for the EZProxy access banner, including:
+    - `backgroundColor`, `textColor`, `borderColor`, `padding`, `fontFamily`, `fontSize`, `lineHeight`, `boxShadow`, `zIndex`, `animationDuration`, `mobileBreakpoint`
+    - `button`: Styles and text for the main action button
+    - `dismissButton`: Styles and text for the dismiss button
+    - `closeButton`: Styles and text for the close button
+
+See the comments in `config.json` for more details on each option.
 
 ### To install
 Until this becomes available in the Chrome Extension store, clone the repository or download the zip file from the releases page.  
