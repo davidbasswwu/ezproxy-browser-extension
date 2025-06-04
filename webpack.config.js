@@ -14,13 +14,10 @@ module.exports = (env, argv) => ({
     popup: './popup.js',
   },
   output: {
-    filename: '[name].bundle.js',
+    filename: '[name].js',
     path: path.resolve(__dirname, 'dist'),
     publicPath: '',
     clean: true,
-  },
-  experiments: {
-    outputModule: true,
   },
   target: ['web', 'es2020'],
   module: {
@@ -53,18 +50,13 @@ module.exports = (env, argv) => ({
         extractComments: false,
       }),
     ],
-    splitChunks: {
-      chunks: 'all',
-      minSize: 10000,
-      maxSize: 250000,
-    },
   },
   plugins: [
     new CleanWebpackPlugin(),
     new CopyWebpackPlugin({
       patterns: [
         { from: '*.html', to: '.' },
-        { from: '*.css', to: '.' },
+        { from: '*.css', to: '.', noErrorOnMissing: true },
         { from: 'manifest.json', to: '.' },
         { from: 'images', to: 'images' },
         { from: 'config.json', to: '.', noErrorOnMissing: true },
@@ -72,11 +64,11 @@ module.exports = (env, argv) => ({
         { from: 'utils', to: 'utils', noErrorOnMissing: true },
       ],
     }),
-    new ESLintPlugin({
-      extensions: ['js'],
-      exclude: 'node_modules',
-      fix: true
-    }),
+    // new ESLintPlugin({
+    //   extensions: ['js'],
+    //   exclude: 'node_modules',
+    //   fix: true
+    // }),
   ],
   performance: {
     hints: 'warning',

@@ -6,7 +6,7 @@
     "institutionShortName": "WWU",
     "institutionLibraryName": "WWU Libraries",
     "libraryHelpUrl": "https://askus.library.wwu.edu/search/?q=",
-    "updateInterval": 120, 
+    "updateInterval": 86400000, 
     "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
     "retryAttempts": 3,
     "retryDelay": 2000,
