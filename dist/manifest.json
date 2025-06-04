@@ -14,11 +14,11 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.bundle.js"
+    "service_worker": "background.js"
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
-    "js": ["content.bundle.js"],
+    "js": ["content.js"],
     "all_frames": true
   }],
   "content_security_policy": {
@@ -33,7 +33,8 @@
       "images/icon-48.png",
       "images/icon-128.png",
       "images/icon-dismissed-16.png",
-      "images/icon-dismissed-32.png"
+      "images/icon-dismissed-32.png",
+      "popup.js"
     ],
     "matches": ["<all_urls>"]
   }],
