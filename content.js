@@ -11,6 +11,9 @@ const STORAGE_KEYS = {
 // Global variable to track if we've initialized
 let isInitialized = false;
 
+// Global list of exception domains loaded from domain-list.json
+let EXCEPTION_DOMAINS = [];
+
 // Check if user has reduced motion preference
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -67,18 +70,31 @@ async function getDomainList() {
         }
         
         const data = await response.json();
-        console.log('Domain list loaded successfully, entries:', data.length);
-        return Array.isArray(data) ? data : [];
+
+        // Handle legacy array format or new object format
+        let domainArray = [];
+        if (Array.isArray(data)) {
+            domainArray = data;
+            EXCEPTION_DOMAINS = [];
+        } else if (data && Array.isArray(data.domains)) {
+            domainArray = data.domains;
+            EXCEPTION_DOMAINS = Array.isArray(data.exceptions) ? data.exceptions : [];
+        }
+
+        console.log('Domain list loaded. Domains:', domainArray.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
+        return domainArray;
     } catch (error) {
         console.error('Error loading domain list:', error);
-        // Try to load a backup list from storage
+        // Try to load a backup list from storage (legacy array only)
         try {
             const result = await chrome.storage.local.get('ezproxy-domain-list-backup');
             const backupList = result['ezproxy-domain-list-backup'];
             console.log('Using backup domain list from storage:', backupList ? backupList.length : 0, 'entries');
+            EXCEPTION_DOMAINS = [];
             return Array.isArray(backupList) ? backupList : [];
         } catch (storageError) {
             console.error('Failed to load backup domain list:', storageError);
+            EXCEPTION_DOMAINS = [];
             return [];
         }
     }
@@ -759,7 +775,6 @@ async function createBanner(message, ezproxyUrl, domain) {
     closeButton.innerHTML = closeButtonConfig.text || '&times;';
     closeButton.setAttribute('aria-label', 'Close this notification');
     
-    // Apply close button styles
     closeButton.style.cssText = `
         background: transparent;
         border: none;
@@ -778,7 +793,6 @@ async function createBanner(message, ezproxyUrl, domain) {
         transition: all 0.2s ease;
     `;
     
-    // Add hover and focus styles for close button
     closeButton.addEventListener('mouseenter', () => {
         closeButton.style.backgroundColor = closeButtonConfig.hoverColor || '#e9ecef';
         closeButton.style.color = closeButtonConfig.hoverColor || '#212529';
@@ -898,8 +912,8 @@ function checkEZProxyExceptionURL(config) {
     const originalDomain = transformedDomain.replace(/-/g, '.');
     
     // Check if this original domain is in our exception list
-    if (config.urlExceptions && Array.isArray(config.urlExceptions)) {
-        const matchedExceptionDomain = config.urlExceptions.find(exception => 
+    if (Array.isArray(EXCEPTION_DOMAINS)) {
+        const matchedExceptionDomain = EXCEPTION_DOMAINS.find(exception => 
             originalDomain.includes(exception) || originalDomain === exception
         );
         
@@ -1354,8 +1368,9 @@ async function checkAndShowBanner(url) {
         }
         
         // Check if the domain is in the exceptions list
-        const matchedExceptionDomain = Array.isArray(config.urlExceptions) ? 
-            config.urlExceptions.find(exception => matchedDomain.includes(exception)) : null;
+        const matchedExceptionDomain = EXCEPTION_DOMAINS.find(exception => 
+            matchedDomain.includes(exception) || matchedDomain === exception
+        );
         const isException = !!matchedExceptionDomain;
         
         let ezproxyUrl;
