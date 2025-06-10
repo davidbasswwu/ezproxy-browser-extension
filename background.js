@@ -244,7 +244,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
             const domain = url.hostname;
             
             // Get the current tab's ID
-            const currentTab = await chrome.tabs.get(tabId);
+            // Removed unused variable 'currentTab' to fix ESLint error
             
             // Check if the domain is dismissed
             const result = await chrome.storage.local.get('ezproxy-dismissed-domains');

@@ -8,20 +8,6 @@ const STORAGE_KEYS = {
     AUTO_REDIRECT: 'ezproxy-auto-redirect'
 };
 
-// Icon paths
-const ICON_PATHS = {
-    NORMAL: {
-        '16': 'images/icon-16.png',
-        '48': 'images/icon-48.png',
-        '128': 'images/icon-128.png'
-    },
-    DISMISSED: {
-        '16': 'images/icon-dismissed-16.png',
-        '48': 'images/icon-48.png',  // Using normal icon for larger sizes
-        '128': 'images/icon-128.png'  // Using normal icon for larger sizes
-    }
-};
-
 // Global variable to track if we've initialized
 let isInitialized = false;
 
@@ -344,7 +330,7 @@ async function hasInstitutionalAccess(config) {
     
     // Check for access indicators in page text
     const foundIndicators = [];
-    const hasIndicator = accessIndicators.some(indicator => {
+    accessIndicators.some(indicator => {
         if (!indicator) return false;
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
@@ -421,29 +407,29 @@ async function isDomainDismissed(domain) {
 }
 
 // Update the extension icon based on domain dismissal status
-async function updateExtensionIcon(domain, isDismissed) {
-    try {
-        // First get the current tab ID
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        const tabId = tabs && tabs[0] && tabs[0].id;
-        
-        if (!tabId) {
-            console.warn('Could not get current tab ID for icon update');
-            return;
-        }
-        
-        console.log(`Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
-        
-        // Send message to update the icon
-        await chrome.runtime.sendMessage({
-            action: 'updateIcon',
-            tabId: tabId,
-            isDismissed: isDismissed
-        });
-    } catch (error) {
-        console.error('Error updating extension icon:', error);
-    }
-}
+// async function updateExtensionIcon(domain, isDismissed) {
+//     try {
+//         // First get the current tab ID
+//         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+//         const tabId = tabs && tabs[0] && tabs[0].id;
+//         
+//         if (!tabId) {
+//             console.warn('Could not get current tab ID for icon update');
+//             return;
+//         }
+//         
+//         console.log(`Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
+//         
+//         // Send message to update the icon
+//         await chrome.runtime.sendMessage({
+//             action: 'updateIcon',
+//             tabId: tabId,
+//             isDismissed: isDismissed
+//         });
+//     } catch (error) {
+//         console.error('Error updating extension icon:', error);
+//     }
+// }
 
 async function dismissDomain(domain) {
     try {
@@ -890,7 +876,6 @@ async function removeBanner() {
  * @returns {Object|null} - Object with original domain if match found, null otherwise
  */
 function checkEZProxyExceptionURL(config) {
-    const currentUrl = window.location.href;
     const currentHostname = window.location.hostname;
     
     // Check if we're on an EZProxy domain
@@ -898,9 +883,9 @@ function checkEZProxyExceptionURL(config) {
         return null;
     }
     
-    // Parse the EZProxy URL format to extract the original domain
-    // Format is typically: https://www-example-com.ezproxy.library.wwu.edu/path
-    const ezproxyPattern = new RegExp(`^([^.]+)\\.${config.ezproxyBaseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+    // Sanitize ezproxyBaseUrl before using in RegExp
+    const safeEzproxyBaseUrl = String(config.ezproxyBaseUrl).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const ezproxyPattern = new RegExp(`^([^.]+)\.${safeEzproxyBaseUrl}`);
     const match = currentHostname.match(ezproxyPattern);
     
     if (!match) {
