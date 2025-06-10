@@ -139,9 +139,7 @@ resetButton.addEventListener('click', async () => {
         console.log('Starting reset process...');
         
         // Save the original button text
-        const originalButtonText = resetButton.textContent;
-        resetButton.disabled = true;
-        resetButton.textContent = 'Resetting...';
+        // Removed unused variable 'originalButtonText' to fix ESLint error
         
         // Clear the dismissed domains
         console.log('Clearing dismissed domains from storage...');
