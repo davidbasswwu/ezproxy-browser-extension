@@ -3,6 +3,8 @@ const STORAGE_KEYS = {
     DISMISSED_DOMAINS: 'ezproxy-dismissed-domains',
     AUTO_REDIRECT: 'ezproxy-auto-redirect'
 };
+// Global list of exception domains loaded from domain-list.json
+let EXCEPTION_DOMAINS = [];
 
 // Get DOM elements
 const statusDiv = document.getElementById('status');
@@ -26,9 +28,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         console.log('Checking URL:', tab.url);
         
-        // Check if current URL is in the domain list
+        // Check if current URL is in the domain list or exception list
         const domainList = await getDomainList();
-        console.log('Domain list loaded, length:', domainList.length);
+        console.log('Domain list loaded, length:', domainList.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
         
         if (!domainList || domainList.length === 0) {
             console.error('Domain list is empty or failed to load');
@@ -38,24 +40,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const currentUrl = new URL(tab.url);
         console.log('Current hostname:', currentUrl.hostname);
-        
-        // Load config for EZProxy base and help URL
+
+        // Load config for EZProxy base and help URL (ensure defined before using)
         const config = await (await fetch(chrome.runtime.getURL('config.json'))).json();
         const ezproxyBaseUrl = config.ezproxyBaseUrl;
         const libraryHelpUrl = config.libraryHelpUrl;
         const secondaryHelpButtonText = config.secondaryHelpButtonText || 'Info for this site';
-
-        // Utility to extract the base domain (e.g., chronicle.com) from a proxied hostname (e.g., www-chronicle-com.ezproxy.library.wwu.edu)
-        function getBaseDomainFromProxied(hostname, ezproxyBaseUrl) {
-            // Remove the ezproxy part
-            const proxiedPart = hostname.replace('.' + ezproxyBaseUrl, '');
-            // Convert dashes to dots
-            const original = proxiedPart.replace(/-/g, '.');
-            // Return last two parts (base domain)
-            const parts = original.split('.');
-            if (parts.length <= 2) return original;
-            return parts.slice(-2).join('.');
-        }
 
         // Detect if current page is already proxied
         if (currentUrl.hostname.includes(ezproxyBaseUrl)) {
@@ -67,6 +57,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (helpUrl) {
                 helpUrl += (helpUrl.includes('?') ? '&' : '?') + 'q=' + encodeURIComponent(baseDomain);
             }
+            accessButton.onclick = () => {
+                chrome.tabs.create({ url: helpUrl });
+                window.close();
+            };
+            return;
+        }
+
+        // First, handle exception domains that require special help flow
+        const isExceptionDomain = Array.isArray(EXCEPTION_DOMAINS) && EXCEPTION_DOMAINS.some(ex => currentUrl.hostname.endsWith(ex) || currentUrl.hostname === ex);
+        if (isExceptionDomain) {
+            const baseDomainParts = currentUrl.hostname.split('.');
+            const baseDomain = baseDomainParts.slice(-2).join('.');
+            let helpUrl = libraryHelpUrl;
+            if (helpUrl) {
+                helpUrl += (helpUrl.includes('?') ? '&' : '?') + 'q=' + encodeURIComponent(baseDomain);
+            }
+            updateStatus('This site may require special access. See library help.', true);
+            accessButton.disabled = false;
+            accessButton.textContent = secondaryHelpButtonText;
             accessButton.onclick = () => {
                 chrome.tabs.create({ url: helpUrl });
                 window.close();
@@ -254,8 +263,16 @@ async function getDomainList() {
         }
         
         const data = await response.json();
-        console.log('Domain list loaded successfully, entries:', data.length);
-        return Array.isArray(data) ? data : [];
+        let domainsArray = [];
+        if (Array.isArray(data)) {
+            domainsArray = data;
+            EXCEPTION_DOMAINS = [];
+        } else if (data && Array.isArray(data.domains)) {
+            domainsArray = data.domains;
+            EXCEPTION_DOMAINS = Array.isArray(data.exceptions) ? data.exceptions : [];
+        }
+        console.log('Domain list loaded successfully, entries:', domainsArray.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
+        return domainsArray;
     } catch (error) {
         console.error('Error loading domain list:', error);
         // Try to load a backup list from storage
@@ -378,4 +395,16 @@ async function undismissDomain(domain) {
         console.error('Error undismissing domain:', error);
         updateStatus('Error updating settings', false);
     }
+}
+
+// Utility to extract the base domain (e.g., chronicle.com) from a proxied hostname (e.g., www-chronicle-com.ezproxy.library.wwu.edu)
+function getBaseDomainFromProxied(hostname, ezproxyBaseUrl) {
+    // Remove the ezproxy part
+    const proxiedPart = hostname.replace('.' + ezproxyBaseUrl, '');
+    // Convert dashes to dots
+    const original = proxiedPart.replace(/-/g, '.');
+    // Return last two parts (base domain)
+    const parts = original.split('.');
+    if (parts.length <= 2) return original;
+    return parts.slice(-2).join('.');
 }
