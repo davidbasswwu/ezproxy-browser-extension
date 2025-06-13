@@ -1175,9 +1175,16 @@ async function removeSecondaryBanner() {
 async function init() {
     if (isInitialized) return;
     
-    // Check if we're on an EZProxy URL for an exception domain
+    // Ensure domain list and config are loaded before checking exception URL
     try {
-        const config = await getConfig();
+        // Load config and domain list in parallel
+        const [config] = await Promise.all([
+            getConfig(),
+            // Load domain list so EXCEPTION_DOMAINS is populated before we test
+            getDomainList().catch(() => [])
+        ]);
+
+        // Check if we're on an EZProxy URL for an exception domain
         const ezproxyMatch = checkEZProxyExceptionURL(config);
         
         if (ezproxyMatch) {
