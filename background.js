@@ -72,12 +72,21 @@ async function loadLocalDomainList() {
         }
         const domains = await response.json();
         
-        // Validate domain list format
-        if (!Array.isArray(domains)) {
-            throw new Error('Domain list must be an array');
+        // Handle both formats: simple array or structured object
+        let domainArray = [];
+        if (Array.isArray(domains)) {
+            // Legacy format: simple array
+            domainArray = domains;
+        } else if (domains && Array.isArray(domains.domains)) {
+            // New format: structured object with domains and exceptions
+            domainArray = domains.domains;
+            console.log('Local domain list has structured format with', domainArray.length, 'domains and', 
+                       (domains.exceptions || []).length, 'exceptions');
+        } else {
+            throw new Error('Domain list must be an array or structured object with domains array');
         }
         
-        return new Set(domains.filter(domain => typeof domain === 'string' && domain.length > 0));
+        return new Set(domainArray.filter(domain => typeof domain === 'string' && domain.length > 0));
     } catch (error) {
         console.error('Error loading local domain list:', error);
         return new Set(); // Return empty set as last resort
@@ -138,12 +147,21 @@ async function updateDomainList() {
         
         const domains = await response.json();
         
-        // Validate remote domain list
-        if (!Array.isArray(domains)) {
-            throw new Error('Remote domain list is not an array');
+        // Handle both formats: simple array or structured object
+        let domainArray = [];
+        if (Array.isArray(domains)) {
+            // Legacy format: simple array
+            domainArray = domains;
+        } else if (domains && Array.isArray(domains.domains)) {
+            // New format: structured object with domains and exceptions
+            domainArray = domains.domains;
+            console.log('Remote domain list has structured format with', domainArray.length, 'domains and', 
+                       (domains.exceptions || []).length, 'exceptions');
+        } else {
+            throw new Error('Remote domain list is neither an array nor a valid structured object');
         }
         
-        const validDomains = domains
+        const validDomains = domainArray
             .filter(domain => typeof domain === 'string' && domain.length > 0)
             .map(domain => domain.toLowerCase().trim())
             .filter(domain => {
