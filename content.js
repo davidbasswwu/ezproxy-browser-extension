@@ -1312,7 +1312,7 @@ async function checkAndShowBanner(url) {
         // Step 6: Check for institutional access
         console.log('[checkAndShowBanner] Step 6: Checking for institutional access...');
         try {
-            const hasAccess = hasInstitutionalAccess(config);
+            const hasAccess = await hasInstitutionalAccess(config);
             
             if (hasAccess) {
                 console.log('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
