@@ -2,8 +2,8 @@
  * Security utilities for the EZProxy extension
  */
 
-// Encryption key (in production, use a more secure key derivation)
-const ENCRYPTION_KEY = 'a1b2c3d4e5f6g7h8';
+// Note: Encryption functionality has been removed. If needed in the future,
+// implement proper key derivation and secure storage practices.
 
 // Rate limiting configuration
 const RATE_LIMIT = {

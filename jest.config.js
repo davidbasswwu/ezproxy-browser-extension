@@ -10,7 +10,7 @@ module.exports = {
   testMatch: ['**/tests/**/*.test.js'],
   setupFilesAfterEnv: ['<rootDir>/tests/test-helpers.js'],
   transformIgnorePatterns: [
-    '/node_modules/(?!(your-esm-dependencies-to-transform)/)'
+    '/node_modules/(?!(core-js|@babel)/)'
   ],
   testPathIgnorePatterns: [
     '/node_modules/'

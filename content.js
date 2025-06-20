@@ -772,7 +772,7 @@ async function createBanner(message, ezproxyUrl, domain) {
     
     // Close button (for current session only)
     const closeButton = document.createElement('button');
-    closeButton.innerHTML = closeButtonConfig.text || '&times;';
+    closeButton.textContent = closeButtonConfig.text || '×';
     closeButton.setAttribute('aria-label', 'Close this notification');
     
     closeButton.style.cssText = `
@@ -899,7 +899,8 @@ function checkEZProxyExceptionURL(config) {
     
     // Sanitize ezproxyBaseUrl before using in RegExp
     const safeEzproxyBaseUrl = String(config.ezproxyBaseUrl).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const ezproxyPattern = new RegExp(`^([^.]+)\.${safeEzproxyBaseUrl}`);
+    // Use static RegExp pattern to avoid security issues
+    const ezproxyPattern = new RegExp('^([^.]+)\\.' + safeEzproxyBaseUrl);
     const match = currentHostname.match(ezproxyPattern);
     
     if (!match) {
@@ -1058,7 +1059,7 @@ async function createSecondaryBanner(originalDomain, helpUrl, buttonText) {
 
     // Close button
     const closeButton = document.createElement('button');
-    closeButton.innerHTML = '&times;';
+    closeButton.textContent = '×';
     closeButton.setAttribute('aria-label', 'Close this notification');
     
     closeButton.style.cssText = `
@@ -1439,13 +1440,25 @@ async function checkAndShowBanner(url) {
             errorBanner.style.maxWidth = '300px';
             errorBanner.style.fontFamily = 'Arial, sans-serif';
             errorBanner.style.fontSize = '14px';
-            errorBanner.innerHTML = `
-                <div style="font-weight: bold; margin-bottom: 5px;">EZProxy Extension Error</div>
-                <div>${error.message || 'An unknown error occurred'}</div>
-                <div style="margin-top: 5px; font-size: 12px; color: #666;">
-                    Check console for details
-                </div>
-            `;
+            
+            // Create error content safely
+            const errorTitle = document.createElement('div');
+            errorTitle.style.fontWeight = 'bold';
+            errorTitle.style.marginBottom = '5px';
+            errorTitle.textContent = 'EZProxy Extension Error';
+            
+            const errorMessage = document.createElement('div');
+            errorMessage.textContent = error.message || 'An unknown error occurred';
+            
+            const errorDetail = document.createElement('div');
+            errorDetail.style.marginTop = '5px';
+            errorDetail.style.fontSize = '12px';
+            errorDetail.style.color = '#666';
+            errorDetail.textContent = 'Check console for details';
+            
+            errorBanner.appendChild(errorTitle);
+            errorBanner.appendChild(errorMessage);
+            errorBanner.appendChild(errorDetail);
             document.body.appendChild(errorBanner);
             
             // Auto-remove after 10 seconds
