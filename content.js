@@ -383,10 +383,9 @@ async function hasInstitutionalAccess(config) {
     // Check for access denied or login required pages (more specific patterns)
     const deniedIndicators = [
         'access denied',
-        'login',
-        'log in', 
-        'signin',
+        'login required',
         'sign in',
+        'log in', 
         'authentication required',
         'institutional access required',
         'subscription required',
@@ -1466,21 +1465,11 @@ async function checkAndShowBanner(url) {
     }
 }
 
-// Initialize when DOM is fully loaded, with additional delay for dynamic content
+// Initialize when DOM is fully loaded
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('[init] DOM loaded, adding delay for dynamic content...');
-        setTimeout(() => {
-            console.log('[init] Delay complete, initializing extension...');
-            init();
-        }, 2000); // Wait 2 seconds for dynamic content to load
-    });
+    document.addEventListener('DOMContentLoaded', init);
 } else {
-    console.log('[init] DOM already loaded, adding delay for dynamic content...');
-    setTimeout(() => {
-        console.log('[init] Delay complete, initializing extension...');
-        init();
-    }, 2000); // Wait 2 seconds for dynamic content to load
+    init();
 }
 
 // Enhanced message listener with auto-redirect support
@@ -1492,13 +1481,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // to prevent connection issues
         sendResponse({ received: true });
         
-        // Add a delay to ensure page content has fully loaded (especially for dynamic sites)
-        console.log('[onMessage] Adding delay to ensure page content is fully loaded...');
-        setTimeout(() => {
-            console.log('[onMessage] Delay complete, proceeding with banner check...');
-            
-            // Use a promise chain to handle all the checks in sequence
-            getConfig()
+        // Use a promise chain to handle all the checks in sequence
+        getConfig()
             .then(config => {
                 // Store the config for later use
                 const configData = config;
@@ -1559,7 +1543,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     console.error('[onMessage] Error processing domain match:', err);
                 }
             });
-        }, 2000); // Wait 2 seconds for page content to fully load
         
         // Return true to indicate we'll handle this asynchronously
         return true;
