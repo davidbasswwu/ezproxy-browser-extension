@@ -346,18 +346,20 @@ async function hasInstitutionalAccess(config) {
     
     // Check for access indicators in page text
     const foundIndicators = [];
-    accessIndicators.some(indicator => {
-        if (!indicator) return false;
+    accessIndicators.forEach(indicator => {
+        if (!indicator) return;
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
             foundIndicators.push(indicator);
-            return true;
+            console.log(`[hasInstitutionalAccess] FOUND INDICATOR: "${indicator}" in page text`);
         }
-        return false;
     });
     
     if (foundIndicators.length > 0) {
+        console.warn('[hasInstitutionalAccess] ⚠️  INSTITUTIONAL ACCESS DETECTED - BANNER WILL NOT SHOW');
         console.log('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
+        console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
+        console.log('[hasInstitutionalAccess] Page title:', document.title);
         return true;
     }
     
@@ -378,14 +380,17 @@ async function hasInstitutionalAccess(config) {
         return true;
     }
     
-    // Check for access denied or login required pages
+    // Check for access denied or login required pages (more specific patterns)
     const deniedIndicators = [
         'access denied',
         'login required',
-        'sign in',
-        'log in',
+        'please sign in to continue',
+        'please log in to continue', 
+        'sign in to access',
+        'log in to access',
         'authentication required',
-        'institutional access required'
+        'institutional access required',
+        'subscription required'
     ];
     
     const isDeniedPage = deniedIndicators.some(indicator => 
@@ -397,7 +402,9 @@ async function hasInstitutionalAccess(config) {
         return false;
     }
     
-    console.log('[hasInstitutionalAccess] No institutional access indicators found');
+    console.log('[hasInstitutionalAccess] ✅ NO institutional access indicators found - BANNER SHOULD SHOW');
+    console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
+    console.log('[hasInstitutionalAccess] Page title:', document.title);
     return false;
 }
 
