@@ -384,21 +384,30 @@ async function hasInstitutionalAccess(config) {
     const deniedIndicators = [
         'access denied',
         'login required',
-        'please sign in to continue',
-        'please log in to continue', 
-        'sign in to access',
-        'log in to access',
+        'sign in',
+        'log in', 
         'authentication required',
         'institutional access required',
-        'subscription required'
+        'subscription required',
+        'subscribe',
+        'register', 
     ];
     
-    const isDeniedPage = deniedIndicators.some(indicator => 
-        normalizedPageText.includes(indicator)
-    );
+    // Check each denied indicator and log what we find
+    const foundDeniedIndicators = [];
+    const isDeniedPage = deniedIndicators.some(indicator => {
+        const found = normalizedPageText.includes(indicator.toLowerCase());
+        if (found) {
+            foundDeniedIndicators.push(indicator);
+            console.log(`[hasInstitutionalAccess] FOUND DENIED INDICATOR: "${indicator}" in page text`);
+        }
+        return found;
+    });
     
     if (isDeniedPage) {
-        console.log('[hasInstitutionalAccess] Detected access denied/login page');
+        console.log('[hasInstitutionalAccess] 🚫 ACCESS DENIED/LOGIN PAGE DETECTED - BANNER SHOULD SHOW');
+        console.log('[hasInstitutionalAccess] Found denied indicators:', foundDeniedIndicators);
+        console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
         return false;
     }
     
