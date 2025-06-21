@@ -1211,6 +1211,16 @@ async function init() {
         }
     });
     
+    // IMPORTANT: Also check the current page for banner display
+    // This serves as a fallback in case the background script message system fails
+    console.log('[init] Checking current page for banner display...');
+    try {
+        const currentUrl = window.location.href;
+        await checkAndShowBanner(currentUrl);
+    } catch (error) {
+        console.error('[init] Error checking current page for banner:', error);
+    }
+    
     isInitialized = true;
 }
 
