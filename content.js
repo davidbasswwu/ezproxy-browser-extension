@@ -352,6 +352,13 @@ async function hasInstitutionalAccess(config) {
         if (found) {
             foundIndicators.push(indicator);
             console.log(`[hasInstitutionalAccess] FOUND INDICATOR: "${indicator}" in page text`);
+            
+            // Show context around the found indicator for debugging
+            const indicatorIndex = normalizedPageText.indexOf(indicator.toLowerCase());
+            const contextStart = Math.max(0, indicatorIndex - 50);
+            const contextEnd = Math.min(normalizedPageText.length, indicatorIndex + indicator.length + 50);
+            const context = normalizedPageText.substring(contextStart, contextEnd);
+            console.log(`[hasInstitutionalAccess] CONTEXT: "...${context}..."`);
         }
     });
     
@@ -360,6 +367,7 @@ async function hasInstitutionalAccess(config) {
         console.log('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
         console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
         console.log('[hasInstitutionalAccess] Page title:', document.title);
+        console.log('[hasInstitutionalAccess] Full page text length:', normalizedPageText.length);
         return true;
     }
     
