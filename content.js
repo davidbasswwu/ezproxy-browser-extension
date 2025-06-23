@@ -1330,29 +1330,19 @@ async function checkAndShowBanner(url) {
         }
         
         // Step 8: Prepare EZProxy URL
-        console.log('[checkAndShowBanner] Step 8: Preparing EZProxy URL...');
+        debugLog('Preparing EZProxy URL', { domain, ezproxyBaseUrl: config.ezproxyBaseUrl });
         if (!config.ezproxyBaseUrl) {
             console.error('[checkAndShowBanner] No EZProxy base URL configured');
             return;
         }
         
-        let ezproxyBase = config.ezproxyBaseUrl.trim();
-        if (!ezproxyBase.endsWith('/')) {
-            ezproxyBase = `${ezproxyBase}/`;
-        }
+        // Create proper EZProxy subdomain URL
+        // Convert www.jstor.org -> www-jstor-org.ezproxy.library.wwu.edu
+        const transformedDomain = domain.replace(/\./g, '-');
+        const ezproxyUrl = `https://${transformedDomain}.${config.ezproxyBaseUrl}/`;
         
-        // Clean the target URL
-        let targetUrl = url;
-        const httpMatch = targetUrl.match(/^https?:\/\/(.*)/i);
-        if (httpMatch) {
-            targetUrl = httpMatch[1];
-        }
-        
-        // Create standard EZProxy URL for ALL domains (including exceptions)
-        // Exception domains will show secondary banner when user gets to EZProxy URL
-        const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
         const bannerMessage = `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`;
-        console.log('[checkAndShowBanner] Created EZProxy URL:', ezproxyUrl);
+        debugLog('Created EZProxy URL', { originalDomain: domain, transformedDomain, ezproxyUrl });
         
         // Step 9: Create and show the banner
         debugLog('Creating banner', { domain: matchedDomain, ezproxyUrl });

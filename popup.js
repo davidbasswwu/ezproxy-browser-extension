@@ -293,21 +293,22 @@ async function redirectToEZProxy(url) {
     try {
         const config = await (await fetch(chrome.runtime.getURL('config.json'))).json();
         
-        // Ensure the target URL is properly formatted
-        let targetUrl = url;
-        if (targetUrl.startsWith('http://')) {
-            targetUrl = targetUrl.substring(7); // Remove http://
-        } else if (targetUrl.startsWith('https://')) {
-            targetUrl = targetUrl.substring(8); // Remove https://
+        // Extract domain from URL
+        let domain;
+        try {
+            const urlObj = new URL(url);
+            domain = urlObj.hostname;
+        } catch (e) {
+            console.error('Invalid URL for EZProxy redirect:', url);
+            updateStatus('Invalid URL for redirect', false);
+            return;
         }
         
-        // Ensure the EZProxy base URL ends with a forward slash
-        let ezproxyBase = config.ezproxyBaseUrl;
-        if (!ezproxyBase.endsWith('/')) {
-            ezproxyBase = `${ezproxyBase}/`;
-        }
+        // Create proper EZProxy subdomain URL
+        // Convert www.jstor.org -> www-jstor-org.ezproxy.library.wwu.edu
+        const transformedDomain = domain.replace(/\./g, '-');
+        const ezproxyUrl = `https://${transformedDomain}.${config.ezproxyBaseUrl}/`;
         
-        const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
         console.log('Redirecting to EZProxy URL:', ezproxyUrl);
         
         await chrome.tabs.update({ url: ezproxyUrl });
