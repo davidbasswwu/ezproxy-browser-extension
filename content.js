@@ -210,41 +210,17 @@ async function hasInstitutionalAccess(config) {
     
     console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
-    // DEBUGGING: Special debug for ft.com with visual feedback
+    // Check if this is a domain we want to debug (can be enabled via localStorage)
     const debugHostname = window.location.hostname.toLowerCase();
-    if (debugHostname.includes('ft.com')) {
-        console.log('🔍 [hasInstitutionalAccess] DEBUGGING: ft.com detected!');
-        console.log('🔍 [hasInstitutionalAccess] Current hostname:', debugHostname);
-        console.log('🔍 [hasInstitutionalAccess] Current URL:', window.location.href);
-        console.log('🔍 [hasInstitutionalAccess] Page text length:', pageText.length);
-        console.log('🔍 [hasInstitutionalAccess] First 500 chars:', pageText.substring(0, 500));
-        console.log('🔍 [hasInstitutionalAccess] FORCING BANNER DISPLAY for ft.com debugging');
-        
-        // Add visual debug feedback for ft.com
-        try {
-            const ftDebugDiv = document.createElement('div');
-            ftDebugDiv.style.cssText = `
-                position: fixed !important;
-                top: 50px !important;
-                right: 0 !important;
-                background: blue !important;
-                color: white !important;
-                padding: 10px !important;
-                z-index: 2147483646 !important;
-                font-family: monospace !important;
-                font-size: 11px !important;
-                max-width: 250px !important;
-                border: 2px solid cyan !important;
-            `;
-            ftDebugDiv.textContent = `FT.COM DEBUG: hasInstitutionalAccess() called - FORCING BANNER`;
-            if (document.body) {
-                document.body.appendChild(ftDebugDiv);
-            }
-        } catch (e) {
-            console.error('Error creating ft.com debug div:', e);
-        }
-        
-        return false; // Force banner to show
+    const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
+    if (isDebugMode && debugHostname.includes('ft.com')) {
+        debugLog('hasInstitutionalAccess debugging for ft.com', {
+            hostname: debugHostname,
+            url: window.location.href,
+            pageTextLength: pageText.length,
+            pageTextSample: pageText.substring(0, 500)
+        });
+        return false; // Force banner to show for debugging
     }
     
     // Check for VERY SPECIFIC indicators of institutional access
