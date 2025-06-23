@@ -1361,10 +1361,11 @@ async function checkAndShowBanner(url) {
             return;
         }
         
-        // Create proper EZProxy subdomain URL
-        // Convert www.jstor.org -> www-jstor-org.ezproxy.library.wwu.edu
+        // Create proper EZProxy subdomain URL with full path
+        // Convert www.jstor.org/article/123 -> www-jstor-org.ezproxy.library.wwu.edu/article/123
         const transformedDomain = domain.replace(/\./g, '-');
-        const ezproxyUrl = `https://${transformedDomain}.${config.ezproxyBaseUrl}/`;
+        const currentUrl = new URL(url);
+        const ezproxyUrl = `${currentUrl.protocol}//${transformedDomain}.${config.ezproxyBaseUrl}${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
         
         const bannerMessage = `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`;
         debugLog('Created EZProxy URL', { originalDomain: domain, transformedDomain, ezproxyUrl });
