@@ -12,28 +12,50 @@ console.log('🚨 TIMESTAMP:', new Date().toISOString());
 let debugBoxCount = 0;
 function addVisualDebug(message, color = 'blue', persistTime = 10000) {
     try {
+        // Only show debug boxes on the main ft.com frame, not ad frames
+        if (window.location.hostname.includes('googlesyndication.com') || 
+            window.location.hostname.includes('googletagservices.com') ||
+            window.location.hostname.includes('doubleclick.net')) {
+            return; // Skip debug boxes in ad frames
+        }
+        
         const debugDiv = document.createElement('div');
         debugDiv.style.cssText = `
             position: fixed !important;
-            top: ${50 + (debugBoxCount * 60)}px !important;
-            right: 0 !important;
+            top: ${150 + (debugBoxCount * 35)}px !important;
+            right: 5px !important;
             background: ${color} !important;
             color: white !important;
-            padding: 8px !important;
-            z-index: ${2147483640 + debugBoxCount} !important;
+            padding: 6px !important;
+            z-index: ${2147483600 + debugBoxCount} !important;
             font-family: monospace !important;
-            font-size: 10px !important;
-            max-width: 200px !important;
-            border: 2px solid white !important;
+            font-size: 11px !important;
+            max-width: 180px !important;
+            border: 1px solid white !important;
+            border-radius: 3px !important;
             word-wrap: break-word !important;
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.5) !important;
         `;
         debugDiv.textContent = `${debugBoxCount}: ${message}`;
         debugBoxCount++;
         
-        if (document.body) {
-            document.body.appendChild(debugDiv);
-        } else if (document.documentElement) {
-            document.documentElement.appendChild(debugDiv);
+        // Try multiple ways to add the element
+        const addToDOM = () => {
+            if (document.body) {
+                document.body.appendChild(debugDiv);
+                return true;
+            } else if (document.documentElement) {
+                document.documentElement.appendChild(debugDiv);
+                return true;
+            }
+            return false;
+        };
+        
+        if (!addToDOM()) {
+            // If DOM isn't ready, wait a bit and try again
+            setTimeout(() => {
+                addToDOM();
+            }, 100);
         }
         
         // Auto-remove after specified time
@@ -54,8 +76,34 @@ function addVisualDebug(message, color = 'blue', persistTime = 10000) {
     }
 }
 
-// Add immediate visual debug
+// Add immediate visual debug - TEST if addVisualDebug works
 addVisualDebug('Script Starting', 'purple', 30000);
+
+// Add more immediate test boxes to see if they appear
+setTimeout(() => {
+    addVisualDebug('Test Box 1', 'blue', 20000);
+}, 100);
+
+setTimeout(() => {
+    addVisualDebug('Test Box 2', 'green', 20000);
+}, 200);
+
+setTimeout(() => {
+    addVisualDebug('Test Box 3', 'orange', 20000);
+}, 300);
+
+// Test additional debug boxes immediately
+setTimeout(() => {
+    addVisualDebug('Test Box 1', 'orange', 30000);
+}, 500);
+
+setTimeout(() => {
+    addVisualDebug('Test Box 2', 'green', 30000);
+}, 1000);
+
+setTimeout(() => {
+    addVisualDebug('Test Box 3', 'cyan', 30000);
+}, 1500);
 
 // AGGRESSIVE DEBUG: Try multiple logging methods to bypass console filtering
 try {
@@ -594,9 +642,13 @@ function restorePageMargin() {
  * @returns {Promise<void>}
  */
 async function createBanner(message, ezproxyUrl, domain) {
+    addVisualDebug('createBanner() function started', 'cyan', 20000);
+    
     // Get the current configuration
     const config = await getConfig();
     const bannerConfig = config.banner || {};
+    
+    addVisualDebug('createBanner: got config', 'lightblue', 20000);
     
     // Remove existing banner if any
     const existingBanner = document.getElementById(BANNER_ID);
@@ -877,6 +929,8 @@ async function createBanner(message, ezproxyUrl, domain) {
     setTimeout(() => {
         redirectButton.focus();
     }, prefersReducedMotion ? 0 : 100);
+    
+    addVisualDebug('createBanner: function completed successfully!', 'brightgreen', 25000);
 }
 
 // Remove banner notification
@@ -1216,7 +1270,15 @@ async function init() {
         addVisualDebug('ft.com detected in init', 'cyan', 20000);
     }
     
-    if (isInitialized) return;
+    if (isInitialized) {
+        addVisualDebug('Already initialized, returning', 'gray', 15000);
+        return;
+    }
+    
+    addVisualDebug('Loading config and domain list', 'teal', 15000);
+    
+    // Declare ezproxyMatch outside the try block so it's accessible later
+    let ezproxyMatch = null;
     
     // Ensure domain list and config are loaded before checking exception URL
     try {
@@ -1226,11 +1288,14 @@ async function init() {
             // Load domain list so EXCEPTION_DOMAINS is populated before we test
             getDomainList().catch(() => [])
         ]);
+        
+        addVisualDebug('Config and domain list loaded', 'darkgreen', 15000);
 
         // Check if we're on an EZProxy URL for an exception domain
-        const ezproxyMatch = checkEZProxyExceptionURL(config);
+        ezproxyMatch = checkEZProxyExceptionURL(config);
         
         if (ezproxyMatch) {
+            addVisualDebug('EZProxy exception URL detected', 'navy', 15000);
             console.log('[init] Detected EZProxy exception URL for domain:', ezproxyMatch.originalDomain);
             // Create the help URL with the BASE domain as search parameter
             const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
@@ -1240,8 +1305,11 @@ async function init() {
             const buttonText = config.secondaryHelpButtonText || 'Info for this site';
             // Show the secondary banner
             await createSecondaryBanner(ezproxyMatch.originalDomain, helpUrlWithSearch, buttonText);
+        } else {
+            addVisualDebug('No EZProxy exception URL', 'darkblue', 15000);
         }
     } catch (error) {
+        addVisualDebug('Error in init config/domain loading', 'red', 20000);
         console.error('[init] Error checking for EZProxy exception URL:', error);
     }
     
@@ -1264,20 +1332,25 @@ async function init() {
     // IMPORTANT: Also check the current page for banner display
     // This serves as a fallback in case the background script message system fails
     // BUT only if we're not already showing a secondary banner for exception domains
+    addVisualDebug('About to check for banner display', 'magenta', 15000);
     console.log('[init] Checking current page for banner display...');
     try {
         const currentUrl = window.location.href;
         
         // If we showed a secondary banner for an exception domain, skip the regular banner check
         if (!ezproxyMatch) {
+            addVisualDebug('Calling checkAndShowBanner', 'yellow', 15000);
             await checkAndShowBanner(currentUrl);
         } else {
+            addVisualDebug('Skipping banner check - exception domain', 'orange', 15000);
             console.log('[init] Skipping regular banner check because secondary banner was shown for exception domain');
         }
     } catch (error) {
+        addVisualDebug('Error in checkAndShowBanner', 'red', 20000);
         console.error('[init] Error checking current page for banner:', error);
     }
     
+    addVisualDebug('Init completed successfully', 'brightgreen', 15000);
     isInitialized = true;
 }
 
@@ -1289,51 +1362,68 @@ async function checkAndShowBanner(url) {
     console.log('🔥 [checkAndShowBanner] Starting check for URL:', url);
     addVisualDebug('checkAndShowBanner() called', 'green', 20000);
     
-    // DEBUGGING: Special debug for ft.com at start of function
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (hostname.includes('ft.com')) {
-        console.log('🔍 [checkAndShowBanner] DEBUGGING: ft.com detected!');
-        console.log('🔍 [checkAndShowBanner] URL:', url);
-        console.log('🔍 [checkAndShowBanner] Hostname:', hostname);
-        addVisualDebug('ft.com detected in checkAndShowBanner', 'lime', 25000);
-        
-        // Add visual debug feedback for ft.com banner check
-        try {
-            const ftBannerDebugDiv = document.createElement('div');
-            ftBannerDebugDiv.style.cssText = `
-                position: fixed !important;
-                top: 100px !important;
-                right: 0 !important;
-                background: green !important;
-                color: white !important;
-                padding: 10px !important;
-                z-index: 2147483645 !important;
-                font-family: monospace !important;
-                font-size: 11px !important;
-                max-width: 250px !important;
-                border: 2px solid lime !important;
-            `;
-            ftBannerDebugDiv.textContent = `FT.COM DEBUG: checkAndShowBanner() running...`;
-            if (document.body) {
-                document.body.appendChild(ftBannerDebugDiv);
-            }
-        } catch (e) {
-            console.error('Error creating ft.com banner debug div:', e);
-        }
-    }
-    
     if (!url || typeof url !== 'string') {
         console.error('[checkAndShowBanner] Invalid URL provided:', url);
+        addVisualDebug('ERROR: Invalid URL provided', 'red', 20000);
         return;
     }
     
     try {
+        addVisualDebug('ENTERED TRY BLOCK', 'orange', 20000);
+        
+        // DEBUGGING: Special debug for ft.com at start of function (moved inside try-catch)
+        let hostname;
+        try {
+            addVisualDebug('About to parse URL', 'yellow', 20000);
+            hostname = new URL(url).hostname.toLowerCase();
+            addVisualDebug(`URL parsed successfully: ${hostname}`, 'lightgreen', 20000);
+        } catch (e) {
+            console.error('[checkAndShowBanner] Error parsing URL for hostname:', url, e);
+            addVisualDebug('ERROR: Failed to parse URL', 'red', 20000);
+            return;
+        }
+        
+        if (hostname.includes('ft.com')) {
+            console.log('🔍 [checkAndShowBanner] DEBUGGING: ft.com detected!');
+            console.log('🔍 [checkAndShowBanner] URL:', url);
+            console.log('🔍 [checkAndShowBanner] Hostname:', hostname);
+            addVisualDebug('ft.com detected in checkAndShowBanner', 'lime', 25000);
+            
+            // Add visual debug feedback for ft.com banner check
+            try {
+                const ftBannerDebugDiv = document.createElement('div');
+                ftBannerDebugDiv.style.cssText = `
+                    position: fixed !important;
+                    top: 100px !important;
+                    right: 0 !important;
+                    background: green !important;
+                    color: white !important;
+                    padding: 10px !important;
+                    z-index: 2147483645 !important;
+                    font-family: monospace !important;
+                    font-size: 11px !important;
+                    max-width: 250px !important;
+                    border: 2px solid lime !important;
+                `;
+                ftBannerDebugDiv.textContent = `FT.COM DEBUG: checkAndShowBanner() running...`;
+                if (document.body) {
+                    document.body.appendChild(ftBannerDebugDiv);
+                }
+            } catch (e) {
+                console.error('Error creating ft.com banner debug div:', e);
+            }
+        }
         // Step 1: Load configuration
         console.log('[checkAndShowBanner] Step 1: Loading configuration...');
+        addVisualDebug('REACHED STEP 1: Loading config...', 'cyan', 20000);
+        
         const config = await getConfig().catch(err => {
             console.error('[checkAndShowBanner] Failed to load config:', err);
+            addVisualDebug('ERROR: Failed to load config', 'red', 20000);
             throw new Error('Failed to load extension configuration');
         });
+        
+        addVisualDebug('Step 1: Config loaded successfully', 'lightgreen', 15000);
         
         if (!config) {
             console.error('[checkAndShowBanner] No configuration loaded');
@@ -1348,28 +1438,38 @@ async function checkAndShowBanner(url) {
         
         // Step 2: Load domain list
         console.log('[checkAndShowBanner] Step 2: Loading domain list...');
+        addVisualDebug('Step 2: Loading domain list...', 'teal', 15000);
+        
         const domainList = await getDomainList().catch(err => {
             console.error('[checkAndShowBanner] Failed to load domain list:', err);
+            addVisualDebug('ERROR: Failed to load domain list', 'red', 20000);
             throw new Error('Failed to load domain list');
         });
+        
+        addVisualDebug('Step 2: Domain list loaded successfully', 'lightgreen', 15000);
         
         console.log(`[checkAndShowBanner] Domain list loaded with ${domainList.length} entries`);
         
         // Step 3: Parse and validate URL
         console.log('[checkAndShowBanner] Step 3: Parsing URL...');
+        addVisualDebug('Step 3: Parsing URL...', 'teal', 15000);
+        
         let domain;
         try {
             const urlObj = new URL(url);
             domain = urlObj.hostname;
             console.log('[checkAndShowBanner] Extracted domain:', domain);
+            addVisualDebug(`Step 3: Extracted domain: ${domain}`, 'lightgreen', 15000);
             
             // Check for IP address (skip if it's an IP)
             if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain)) {
                 console.log('[checkAndShowBanner] IP address detected, skipping banner check');
+                addVisualDebug('Step 3: IP address detected, skipping', 'yellow', 15000);
                 return;
             }
         } catch (e) {
             console.error('[checkAndShowBanner] Invalid URL:', url, 'Error:', e);
+            addVisualDebug('ERROR: Invalid URL in step 3', 'red', 20000);
             return;
         }
         
@@ -1492,6 +1592,7 @@ async function checkAndShowBanner(url) {
         }
     } catch (error) {
         console.error('[checkAndShowBanner] Unhandled error:', error);
+        addVisualDebug(`ERROR: ${error.message || error.toString()}`, 'red', 30000);
         // Try to show a generic error banner if possible
         try {
             const errorBanner = document.createElement('div');
