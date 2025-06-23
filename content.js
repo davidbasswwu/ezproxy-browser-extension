@@ -1,5 +1,10 @@
 // content.js
 
+// IMMEDIATE DEBUG: Log when content script loads
+console.log('🚨 CONTENT SCRIPT LOADED ON:', window.location.href);
+console.log('🚨 DOCUMENT STATE:', document.readyState);
+console.log('🚨 HOSTNAME:', window.location.hostname);
+
 // Constants
 const BANNER_ID = 'ezproxy-banner';
 const SECONDARY_BANNER_ID = 'ezproxy-secondary-banner';
