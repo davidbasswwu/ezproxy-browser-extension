@@ -8,6 +8,55 @@ console.log('🚨 HOSTNAME:', window.location.hostname);
 console.log('🚨 USER AGENT:', navigator.userAgent);
 console.log('🚨 TIMESTAMP:', new Date().toISOString());
 
+// VISUAL DEBUG SYSTEM - Since console logs aren't showing in Edge
+let debugBoxCount = 0;
+function addVisualDebug(message, color = 'blue', persistTime = 10000) {
+    try {
+        const debugDiv = document.createElement('div');
+        debugDiv.style.cssText = `
+            position: fixed !important;
+            top: ${50 + (debugBoxCount * 60)}px !important;
+            right: 0 !important;
+            background: ${color} !important;
+            color: white !important;
+            padding: 8px !important;
+            z-index: ${2147483640 + debugBoxCount} !important;
+            font-family: monospace !important;
+            font-size: 10px !important;
+            max-width: 200px !important;
+            border: 2px solid white !important;
+            word-wrap: break-word !important;
+        `;
+        debugDiv.textContent = `${debugBoxCount}: ${message}`;
+        debugBoxCount++;
+        
+        if (document.body) {
+            document.body.appendChild(debugDiv);
+        } else if (document.documentElement) {
+            document.documentElement.appendChild(debugDiv);
+        }
+        
+        // Auto-remove after specified time
+        setTimeout(() => {
+            if (document.contains(debugDiv)) {
+                debugDiv.remove();
+            }
+        }, persistTime);
+        
+        return debugDiv;
+    } catch (e) {
+        // Fallback if visual debug fails
+        try {
+            console.error('Visual debug failed:', e);
+        } catch (e2) {
+            // Complete fallback - do nothing if both fail
+        }
+    }
+}
+
+// Add immediate visual debug
+addVisualDebug('Script Starting', 'purple', 30000);
+
 // AGGRESSIVE DEBUG: Try multiple logging methods to bypass console filtering
 try {
     // Method 1: Standard console methods
@@ -1156,6 +1205,7 @@ async function init() {
     console.log('🚀 [init] Content script starting...');
     console.log('🚀 [init] Current URL:', window.location.href);
     console.log('🚀 [init] Current hostname:', window.location.hostname);
+    addVisualDebug('init() called', 'orange', 20000);
     
     // DEBUGGING: Special early check for ft.com
     const hostname = window.location.hostname.toLowerCase();
@@ -1163,6 +1213,7 @@ async function init() {
         console.log('🔍 [init] DEBUGGING: ft.com detected in init!');
         console.log('🔍 [init] isInitialized:', isInitialized);
         console.log('🔍 [init] Document readyState:', document.readyState);
+        addVisualDebug('ft.com detected in init', 'cyan', 20000);
     }
     
     if (isInitialized) return;
@@ -1236,6 +1287,7 @@ async function init() {
  */
 async function checkAndShowBanner(url) {
     console.log('🔥 [checkAndShowBanner] Starting check for URL:', url);
+    addVisualDebug('checkAndShowBanner() called', 'green', 20000);
     
     // DEBUGGING: Special debug for ft.com at start of function
     const hostname = new URL(url).hostname.toLowerCase();
@@ -1243,6 +1295,7 @@ async function checkAndShowBanner(url) {
         console.log('🔍 [checkAndShowBanner] DEBUGGING: ft.com detected!');
         console.log('🔍 [checkAndShowBanner] URL:', url);
         console.log('🔍 [checkAndShowBanner] Hostname:', hostname);
+        addVisualDebug('ft.com detected in checkAndShowBanner', 'lime', 25000);
         
         // Add visual debug feedback for ft.com banner check
         try {
@@ -1423,6 +1476,7 @@ async function checkAndShowBanner(url) {
         
         // Step 9: Create and show the banner
         console.log('[checkAndShowBanner] Step 9: Creating banner...');
+        addVisualDebug('About to create banner', 'yellow', 20000);
         try {
             await createBanner(
                 bannerMessage,
@@ -1430,8 +1484,10 @@ async function checkAndShowBanner(url) {
                 matchedDomain
             );
             console.log('[checkAndShowBanner] Banner creation completed successfully');
+            addVisualDebug('Banner created successfully!', 'brightgreen', 25000);
         } catch (e) {
             console.error('[checkAndShowBanner] Error creating banner:', e);
+            addVisualDebug('Banner creation FAILED', 'red', 25000);
             throw e; // Re-throw to be caught by the outer try-catch
         }
     } catch (error) {
@@ -1484,9 +1540,12 @@ async function checkAndShowBanner(url) {
 }
 
 // Initialize when DOM is fully loaded
+addVisualDebug('Setting up init', 'purple', 20000);
 if (document.readyState === 'loading') {
+    addVisualDebug('DOM loading, waiting for ready', 'blue', 20000);
     document.addEventListener('DOMContentLoaded', init);
 } else {
+    addVisualDebug('DOM ready, calling init immediately', 'blue', 20000);
     init();
 }
 
