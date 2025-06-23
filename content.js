@@ -1515,24 +1515,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         return configData;
                     });
             })
-            .then(config => {
+            .then(async config => {
                 // Then check for institutional access
-                return hasInstitutionalAccess(config)
-                    .then(hasAccess => {
-                        if (hasAccess) {
-                            console.log('[onMessage] User has institutional access, skipping EZProxy notification');
-                            throw new Error('HAS_INSTITUTIONAL_ACCESS');
-                        }
-                        return config;
-                    })
-                    .catch(err => {
-                        if (err.message === 'HAS_INSTITUTIONAL_ACCESS') {
-                            throw err;
-                        }
-                        // If there's an error checking access, continue with banner
-                        console.warn('[onMessage] Error checking institutional access, proceeding with banner:', err);
-                        return config;
-                    });
+                try {
+                    const hasAccess = await hasInstitutionalAccess(config);
+                    if (hasAccess) {
+                        console.log('[onMessage] User has institutional access, skipping EZProxy notification');
+                        throw new Error('HAS_INSTITUTIONAL_ACCESS');
+                    }
+                    return config;
+                } catch (err) {
+                    if (err.message === 'HAS_INSTITUTIONAL_ACCESS') {
+                        throw err;
+                    }
+                    // If there's an error checking access, continue with banner
+                    console.warn('[onMessage] Error checking institutional access, proceeding with banner:', err);
+                    return config;
+                }
             })
             .then(config => {
                 // Then check for auto-redirect
