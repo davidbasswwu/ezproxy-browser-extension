@@ -293,45 +293,32 @@ async function hasInstitutionalAccess(config) {
     //     }
     // }
     
-    // Check for common indicators of institutional access
+    // Check for VERY SPECIFIC indicators of institutional access
+    // Only look for explicit, unambiguous access indicators to avoid false positives
     const accessIndicators = [
-        // Generic access indicators
+        // Only very specific access indicators that clearly indicate institutional access
         'access provided by',
         'authenticated via',
         'logged in as',
-        'institutional access',
+        'institutional access granted',
         'institution=',
         `institution=${instName}`,
         `institution=${configDomain}`,
-        // Institution-specific indicators (from config)
-        instName,
-        configDomain,
-        shortName,
-        // Generic full access indicators
-        'you have full access',
-        'full access available',
-        'access to full text'
+        // Very specific institutional phrases
+        `site license access provided by ${instName}`,
+        `access through ${instName}`,
+        `licensed to ${instName}`,
+        'you are accessing this content through your institution',
+        'institutional subscription',
+        'institutional license'
     ];
     
-    // Add institution-specific phrases
-    if (instName) {
-        accessIndicators.push(`site license access provided by ${instName}`);
-    }
-    
-    // Add library name if available
-    if (libraryName) {
-        accessIndicators.push(libraryName);
-    } else if (instName) {
-        // Fallback to institution name + libraries
-        accessIndicators.push(`${instName} libraries`);
-    }
-    
-    // Add any custom indicators from config
+    // Add any custom indicators from config (but only if explicitly configured)
     if (Array.isArray(config.accessIndicators)) {
         accessIndicators.push(...config.accessIndicators.map(i => i.toLowerCase()));
     }
     
-    // Add full access indicators from config
+    // Add full access indicators from config (but only if explicitly configured)
     if (Array.isArray(config.fullAccessIndicators)) {
         accessIndicators.push(...config.fullAccessIndicators.map(i => i.toLowerCase()));
     }
@@ -388,17 +375,14 @@ async function hasInstitutionalAccess(config) {
         return true;
     }
     
-    // Check for access denied or login required pages (more specific patterns)
+    // Check for access denied or login required pages (only very specific patterns)
     const deniedIndicators = [
         'access denied',
         'login required',
-        'sign in',
-        'log in', 
         'authentication required',
         'institutional access required',
-        'subscription required',
-        'subscribe',
-        'register', 
+        'please log in to continue',
+        'subscription required to view this content'
     ];
     
     // Check each denied indicator and log what we find
