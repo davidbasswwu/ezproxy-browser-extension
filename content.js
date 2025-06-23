@@ -1200,38 +1200,7 @@ async function checkAndShowBanner(url) {
             hostname = new URL(url).hostname.toLowerCase();
             debugLog('URL parsed successfully', { hostname });
             
-            // Special debugging for chronicle.com
-            if (hostname.includes('chronicle.com')) {
-                console.log('🔍 [CHRONICLE DEBUG] Chronicle.com detected!');
-                console.log('🔍 [CHRONICLE DEBUG] Full URL:', url);
-                console.log('🔍 [CHRONICLE DEBUG] Hostname:', hostname);
-                console.log('🔍 [CHRONICLE DEBUG] Proceeding with banner check...');
-                
-                // Create visual debug for chronicle.com
-                const chronicleDebug = document.createElement('div');
-                chronicleDebug.id = 'chronicle-debug';
-                chronicleDebug.style.cssText = `
-                    position: fixed !important;
-                    top: 10px !important;
-                    right: 10px !important;
-                    background: orange !important;
-                    color: white !important;
-                    padding: 15px !important;
-                    z-index: 2147483647 !important;
-                    font-family: monospace !important;
-                    font-size: 12px !important;
-                    max-width: 350px !important;
-                    border: 2px solid red !important;
-                    border-radius: 5px !important;
-                `;
-                chronicleDebug.innerHTML = `
-                    <div><strong>CHRONICLE DEBUG</strong></div>
-                    <div>URL: ${url}</div>
-                    <div>Hostname: ${hostname}</div>
-                    <div>Status: Starting check...</div>
-                `;
-                document.body.appendChild(chronicleDebug);
-            }
+
         } catch (e) {
             debugLog('Failed to parse URL', { url, error: e.message });
             return;
@@ -1291,34 +1260,13 @@ async function checkAndShowBanner(url) {
         console.log('[checkAndShowBanner] Domain to match:', domain);
         console.log('[checkAndShowBanner] Domain list length:', domainList.length);
         
-        // Special debugging for chronicle.com
-        if (domain.includes('chronicle.com')) {
-            console.log('🔍 [CHRONICLE DEBUG] Checking chronicle.com against domain list...');
-            console.log('🔍 [CHRONICLE DEBUG] Domain list sample:', domainList.slice(30, 40));
-            
-            // Update visual debug
-            const chronicleDebug = document.getElementById('chronicle-debug');
-            if (chronicleDebug) {
-                chronicleDebug.innerHTML = `
-                    <div><strong>CHRONICLE DEBUG</strong></div>
-                    <div>URL: ${window.location.href}</div>
-                    <div>Hostname: ${domain}</div>
-                    <div>Status: Checking domain list (${domainList.length} entries)...</div>
-                    <div>Sample domains: ${domainList.slice(30, 40).join(', ')}</div>
-                `;
-            }
-        }
+
         
         const matchedDomain = domainList.find(d => {
             const exactMatch = domain === d;
             const subdomainMatch = domain.endsWith('.' + d);
             
-            // Enhanced debugging for chronicle.com
-            if (domain.includes('chronicle.com') || d.includes('chronicle')) {
-                console.log(`🔍 [CHRONICLE DEBUG] Checking ${d}: exact=${exactMatch}, subdomain=${subdomainMatch}`);
-            } else {
-                console.log(`[checkAndShowBanner] Checking ${d}: exact=${exactMatch}, subdomain=${subdomainMatch}`);
-            }
+            console.log(`[checkAndShowBanner] Checking ${d}: exact=${exactMatch}, subdomain=${subdomainMatch}`);
             
             return exactMatch || subdomainMatch;
         });
@@ -1326,20 +1274,7 @@ async function checkAndShowBanner(url) {
         if (!matchedDomain) {
             console.log('[checkAndShowBanner] Domain not in list, updating icon to normal state');
             
-            // Visual debug for chronicle.com
-            if (domain.includes('chronicle.com')) {
-                const chronicleDebug = document.getElementById('chronicle-debug');
-                if (chronicleDebug) {
-                    chronicleDebug.innerHTML = `
-                        <div><strong>CHRONICLE DEBUG</strong></div>
-                        <div>URL: ${window.location.href}</div>
-                        <div>Hostname: ${domain}</div>
-                        <div style="color: red;"><strong>PROBLEM: Domain NOT found in list!</strong></div>
-                        <div>Domain list length: ${domainList.length}</div>
-                        <div>This is why the banner isn't showing!</div>
-                    `;
-                }
-            }
+
             
             // Update icon to normal state for non-library domains
             try {
@@ -1359,20 +1294,7 @@ async function checkAndShowBanner(url) {
         
         console.log('[checkAndShowBanner] Matched domain in list:', matchedDomain);
         
-        // Visual debug for chronicle.com success
-        if (domain.includes('chronicle.com')) {
-            const chronicleDebug = document.getElementById('chronicle-debug');
-            if (chronicleDebug) {
-                chronicleDebug.innerHTML = `
-                    <div><strong>CHRONICLE DEBUG</strong></div>
-                    <div>URL: ${window.location.href}</div>
-                    <div>Hostname: ${domain}</div>
-                    <div style="color: green;"><strong>SUCCESS: Domain found in list!</strong></div>
-                    <div>Matched: ${matchedDomain}</div>
-                    <div>Status: Proceeding with banner checks...</div>
-                `;
-            }
-        }
+
         
         // Step 5: Check if domain is dismissed
         console.log('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
@@ -1450,22 +1372,7 @@ async function checkAndShowBanner(url) {
         // Step 9: Create and show the banner
         debugLog('Creating banner', { domain: matchedDomain, ezproxyUrl });
         
-        // Visual debug for chronicle.com before banner creation
-        if (domain.includes('chronicle.com')) {
-            const chronicleDebug = document.getElementById('chronicle-debug');
-            if (chronicleDebug) {
-                chronicleDebug.innerHTML = `
-                    <div><strong>CHRONICLE DEBUG</strong></div>
-                    <div>URL: ${window.location.href}</div>
-                    <div>Hostname: ${domain}</div>
-                    <div style="color: green;">SUCCESS: All checks passed!</div>
-                    <div>Matched: ${matchedDomain}</div>
-                    <div>Step 5: Is dismissed? ${isDismissed}</div>
-                    <div>Step 6: Has institutional access? false</div>
-                    <div style="color: blue;"><strong>Creating banner now...</strong></div>
-                `;
-            }
-        }
+
         
         try {
             await createBanner(
@@ -1475,38 +1382,12 @@ async function checkAndShowBanner(url) {
             );
             debugLog('Banner creation completed successfully');
             
-            // Visual debug for chronicle.com success
-            if (domain.includes('chronicle.com')) {
-                const chronicleDebug = document.getElementById('chronicle-debug');
-                if (chronicleDebug) {
-                    chronicleDebug.innerHTML = `
-                        <div><strong>CHRONICLE DEBUG</strong></div>
-                        <div>URL: ${window.location.href}</div>
-                        <div>Hostname: ${domain}</div>
-                        <div style="color: green;"><strong>SUCCESS: Banner created!</strong></div>
-                        <div>EZProxy URL: ${ezproxyUrl}</div>
-                        <div>You should see the banner at the top of the page!</div>
-                    `;
-                }
-            }
+
         } catch (e) {
             debugLog('Banner creation failed', { error: e.message });
             console.error('[checkAndShowBanner] Error creating banner:', e);
             
-            // Visual debug for chronicle.com error
-            if (domain.includes('chronicle.com')) {
-                const chronicleDebug = document.getElementById('chronicle-debug');
-                if (chronicleDebug) {
-                    chronicleDebug.innerHTML = `
-                        <div><strong>CHRONICLE DEBUG</strong></div>
-                        <div>URL: ${window.location.href}</div>
-                        <div>Hostname: ${domain}</div>
-                        <div style="color: red;"><strong>ERROR: Banner creation failed!</strong></div>
-                        <div>Error: ${e.message}</div>
-                        <div>This is why the banner isn't showing!</div>
-                    `;
-                }
-            }
+
             
             throw e; // Re-throw to be caught by the outer try-catch
         }
