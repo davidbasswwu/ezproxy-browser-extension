@@ -1369,41 +1369,11 @@ async function checkAndShowBanner(url) {
             targetUrl = httpMatch[1];
         }
         
-        // Check if the domain is in the exceptions list
-        const matchedExceptionDomain = EXCEPTION_DOMAINS.find(exception => 
-            matchedDomain.includes(exception) || matchedDomain === exception
-        );
-        const isException = !!matchedExceptionDomain;
-        
-        let ezproxyUrl;
-        let bannerMessage;
-        let buttonText;
-        let buttonAriaLabel;
-        
-        if (isException) {
-            // For exceptions, create a URL to the library help page with the domain as a search parameter
-            const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
-            const baseDomain = getBaseDomain(matchedDomain);
-            const helpUrlWithSearch = `${libraryHelpUrl}${libraryHelpUrl.includes('?') ? '&' : '?'}q=${baseDomain}`;
-            ezproxyUrl = helpUrlWithSearch;
-            
-            // Create a more specific message for the exception domain
-            bannerMessage = `${matchedExceptionDomain} requires special access and cannot be accessed via standard EZProxy. Please visit your library's help page for assistance.`;
-            buttonText = 'How to Access';
-            buttonAriaLabel = 'Learn how to access this resource through your library';
-            
-            console.log(`[checkAndShowBanner] Domain ${matchedDomain} is an exception (${matchedExceptionDomain}). Using help URL:`, ezproxyUrl);
-            
-            // Store the exception information to modify the banner later
-            sessionStorage.setItem('ezproxy-exception-domain', 'true');
-            sessionStorage.setItem('ezproxy-exception-button-text', buttonText);
-            sessionStorage.setItem('ezproxy-exception-button-aria', buttonAriaLabel);
-        } else {
-            // Standard EZProxy URL creation
-            ezproxyUrl = `${ezproxyBase}${targetUrl}`;
-            bannerMessage = `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`;
-            console.log('[checkAndShowBanner] Created standard EZProxy URL:', ezproxyUrl);
-        }
+        // Create standard EZProxy URL for ALL domains (including exceptions)
+        // Exception domains will show secondary banner when user gets to EZProxy URL
+        const ezproxyUrl = `${ezproxyBase}${targetUrl}`;
+        const bannerMessage = `This resource is available through ${config.institutionName || 'your library'}. Access the full content via EZProxy.`;
+        console.log('[checkAndShowBanner] Created EZProxy URL:', ezproxyUrl);
         
         // Step 9: Create and show the banner
         console.log('[checkAndShowBanner] Step 9: Creating banner...');
