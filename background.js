@@ -318,6 +318,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Required for async response
     }
     
+    // Handle clearDismissedDomain action
+    if (request.action === 'clearDismissedDomain') {
+        console.log('Clearing dismissed status for domain:', request.domain);
+        chrome.storage.local.get(['dismissedDomains'], (result) => {
+            const dismissedDomains = result.dismissedDomains || {};
+            if (dismissedDomains[request.domain]) {
+                delete dismissedDomains[request.domain];
+                chrome.storage.local.set({ dismissedDomains }, () => {
+                    console.log('Cleared dismissed status for domain:', request.domain);
+                    // Update icon to normal state
+                    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                        if (tabs && tabs[0] && tabs[0].id) {
+                            updateExtensionIcon(tabs[0].id, false)
+                                .then(() => {
+                                    sendResponse({ success: true });
+                                })
+                                .catch(error => {
+                                    console.error('Error updating icon after clearing dismiss:', error);
+                                    sendResponse({ success: false, error: error.message });
+                                });
+                        } else {
+                            sendResponse({ success: true });
+                        }
+                    });
+                });
+            } else {
+                console.log('Domain was not dismissed:', request.domain);
+                sendResponse({ success: true });
+            }
+        });
+        return true; // Required for async response
+    }
+    
     // Handle getTab action
     if (request.action === 'getTab') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
