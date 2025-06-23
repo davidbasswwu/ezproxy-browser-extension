@@ -1205,10 +1205,17 @@ async function init() {
     
     // IMPORTANT: Also check the current page for banner display
     // This serves as a fallback in case the background script message system fails
+    // BUT only if we're not already showing a secondary banner for exception domains
     console.log('[init] Checking current page for banner display...');
     try {
         const currentUrl = window.location.href;
-        await checkAndShowBanner(currentUrl);
+        
+        // If we showed a secondary banner for an exception domain, skip the regular banner check
+        if (!ezproxyMatch) {
+            await checkAndShowBanner(currentUrl);
+        } else {
+            console.log('[init] Skipping regular banner check because secondary banner was shown for exception domain');
+        }
     } catch (error) {
         console.error('[init] Error checking current page for banner:', error);
     }
