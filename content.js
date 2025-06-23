@@ -197,8 +197,6 @@ async function hasInstitutionalAccess(config) {
     // Get institution details from config with defaults
     const instName = (config.institutionName || 'Institution').toLowerCase();
     const configDomain = (config.institutionDomain || 'example.edu').toLowerCase();
-    const shortName = (config.institutionShortName || '').toLowerCase();
-    const libraryName = (config.institutionLibraryName || '').toLowerCase();
     
     debugLog('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
