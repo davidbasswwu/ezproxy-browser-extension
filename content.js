@@ -8,167 +8,29 @@ console.log('🚨 HOSTNAME:', window.location.hostname);
 console.log('🚨 USER AGENT:', navigator.userAgent);
 console.log('🚨 TIMESTAMP:', new Date().toISOString());
 
-// VISUAL DEBUG SYSTEM - Since console logs aren't showing in Edge
-let debugBoxCount = 0;
-function addVisualDebug(message, color = 'blue', persistTime = 10000) {
+// Production logging helper - only logs in development mode
+function debugLog(message, data = null) {
     try {
-        // Only show debug boxes on the main ft.com frame, not ad frames
-        if (window.location.hostname.includes('googlesyndication.com') || 
-            window.location.hostname.includes('googletagservices.com') ||
-            window.location.hostname.includes('doubleclick.net')) {
-            return; // Skip debug boxes in ad frames
-        }
-        
-        const debugDiv = document.createElement('div');
-        debugDiv.style.cssText = `
-            position: fixed !important;
-            top: ${150 + (debugBoxCount * 35)}px !important;
-            right: 5px !important;
-            background: ${color} !important;
-            color: white !important;
-            padding: 6px !important;
-            z-index: ${2147483600 + debugBoxCount} !important;
-            font-family: monospace !important;
-            font-size: 11px !important;
-            max-width: 180px !important;
-            border: 1px solid white !important;
-            border-radius: 3px !important;
-            word-wrap: break-word !important;
-            box-shadow: 2px 2px 4px rgba(0,0,0,0.5) !important;
-        `;
-        debugDiv.textContent = `${debugBoxCount}: ${message}`;
-        debugBoxCount++;
-        
-        // Try multiple ways to add the element
-        const addToDOM = () => {
-            if (document.body) {
-                document.body.appendChild(debugDiv);
-                return true;
-            } else if (document.documentElement) {
-                document.documentElement.appendChild(debugDiv);
-                return true;
+        // Only log in development or when debugging is explicitly enabled
+        const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
+        if (isDebugMode) {
+            if (data) {
+                console.log(`[EZProxy] ${message}`, data);
+            } else {
+                console.log(`[EZProxy] ${message}`);
             }
-            return false;
-        };
-        
-        if (!addToDOM()) {
-            // If DOM isn't ready, wait a bit and try again
-            setTimeout(() => {
-                addToDOM();
-            }, 100);
         }
-        
-        // Auto-remove after specified time
-        setTimeout(() => {
-            if (document.contains(debugDiv)) {
-                debugDiv.remove();
-            }
-        }, persistTime);
-        
-        return debugDiv;
     } catch (e) {
-        // Fallback if visual debug fails
-        try {
-            console.error('Visual debug failed:', e);
-        } catch (e2) {
-            // Complete fallback - do nothing if both fail
-        }
+        // Silently fail if logging fails
     }
 }
 
-// Add immediate visual debug - TEST if addVisualDebug works
-addVisualDebug('Script Starting', 'purple', 30000);
-
-// Add more immediate test boxes to see if they appear
-setTimeout(() => {
-    addVisualDebug('Test Box 1', 'blue', 20000);
-}, 100);
-
-setTimeout(() => {
-    addVisualDebug('Test Box 2', 'green', 20000);
-}, 200);
-
-setTimeout(() => {
-    addVisualDebug('Test Box 3', 'orange', 20000);
-}, 300);
-
-// Test additional debug boxes immediately
-setTimeout(() => {
-    addVisualDebug('Test Box 1', 'orange', 30000);
-}, 500);
-
-setTimeout(() => {
-    addVisualDebug('Test Box 2', 'green', 30000);
-}, 1000);
-
-setTimeout(() => {
-    addVisualDebug('Test Box 3', 'cyan', 30000);
-}, 1500);
-
-// AGGRESSIVE DEBUG: Try multiple logging methods to bypass console filtering
-try {
-    // Method 1: Standard console methods
-    console.info('INFO: Extension loaded');
-    console.warn('WARN: Extension loaded');
-    console.error('ERROR: Extension loaded');
-    
-    // Method 2: Create table for visibility
-    console.table([{
-        Extension: 'EZProxy Extension',
-        Status: 'LOADED',
-        URL: window.location.href,
-        Hostname: window.location.hostname
-    }]);
-    
-    // Method 3: Visual debugging with enhanced visibility
-    const testDiv = document.createElement('div');
-    testDiv.id = 'extension-test-marker';
-    testDiv.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        right: 0 !important;
-        background: red !important;
-        color: white !important;
-        padding: 15px !important;
-        z-index: 2147483647 !important;
-        font-family: monospace !important;
-        font-size: 12px !important;
-        line-height: 1.2 !important;
-        max-width: 300px !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
-        border: 2px solid yellow !important;
-    `;
-    
-    const currentTime = new Date().toLocaleTimeString();
-    testDiv.innerHTML = `
-        <div>🚨 EXTENSION LOADED</div>
-        <div>Time: ${currentTime}</div>
-        <div>Host: ${window.location.hostname}</div>
-        <div style="font-size:10px;">Check Console for Messages</div>
-    `;
-    
-    // Try multiple ways to add the element
-    if (document.body) {
-        document.body.appendChild(testDiv);
-    } else if (document.documentElement) {
-        document.documentElement.appendChild(testDiv);
-    } else {
-        // Fallback: wait for DOM
-        setTimeout(() => {
-            if (document.body) {
-                document.body.appendChild(testDiv);
-            }
-        }, 100);
-    }
-    
-    console.log('🚨 Enhanced test div added to page');
-    
-    // Method 4: Alert as last resort (but commented out to avoid interruption)
-    // alert('EZProxy Extension Loaded - Check Console');
-    
-} catch (e) {
-    console.log('🚨 Error in aggressive debug:', e);
-}
+// Initialize extension logging
+debugLog('Content script loaded', {
+    url: window.location.href,
+    hostname: window.location.hostname,
+    timestamp: new Date().toISOString()
+});
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
@@ -1256,26 +1118,18 @@ async function removeSecondaryBanner() {
  * Initialize the content script
  */
 async function init() {
-    console.log('🚀 [init] Content script starting...');
-    console.log('🚀 [init] Current URL:', window.location.href);
-    console.log('🚀 [init] Current hostname:', window.location.hostname);
-    addVisualDebug('init() called', 'orange', 20000);
-    
-    // DEBUGGING: Special early check for ft.com
-    const hostname = window.location.hostname.toLowerCase();
-    if (hostname.includes('ft.com')) {
-        console.log('🔍 [init] DEBUGGING: ft.com detected in init!');
-        console.log('🔍 [init] isInitialized:', isInitialized);
-        console.log('🔍 [init] Document readyState:', document.readyState);
-        addVisualDebug('ft.com detected in init', 'cyan', 20000);
-    }
+    debugLog('Content script starting', {
+        url: window.location.href,
+        hostname: window.location.hostname,
+        readyState: document.readyState
+    });
     
     if (isInitialized) {
-        addVisualDebug('Already initialized, returning', 'gray', 15000);
+        debugLog('Already initialized, skipping');
         return;
     }
     
-    addVisualDebug('Loading config and domain list', 'teal', 15000);
+    debugLog('Loading config and domain list');
     
     // Declare ezproxyMatch outside the try block so it's accessible later
     let ezproxyMatch = null;
@@ -1289,14 +1143,13 @@ async function init() {
             getDomainList().catch(() => [])
         ]);
         
-        addVisualDebug('Config and domain list loaded', 'darkgreen', 15000);
+        debugLog('Config and domain list loaded successfully');
 
         // Check if we're on an EZProxy URL for an exception domain
         ezproxyMatch = checkEZProxyExceptionURL(config);
         
         if (ezproxyMatch) {
-            addVisualDebug('EZProxy exception URL detected', 'navy', 15000);
-            console.log('[init] Detected EZProxy exception URL for domain:', ezproxyMatch.originalDomain);
+            debugLog('EZProxy exception URL detected', { originalDomain: ezproxyMatch.originalDomain });
             // Create the help URL with the BASE domain as search parameter
             const libraryHelpUrl = config.libraryHelpUrl || 'https://library.example.edu/ask';
             const baseDomain = getBaseDomain(ezproxyMatch.originalDomain);
@@ -1306,10 +1159,10 @@ async function init() {
             // Show the secondary banner
             await createSecondaryBanner(ezproxyMatch.originalDomain, helpUrlWithSearch, buttonText);
         } else {
-            addVisualDebug('No EZProxy exception URL', 'darkblue', 15000);
+            debugLog('No EZProxy exception URL detected');
         }
     } catch (error) {
-        addVisualDebug('Error in init config/domain loading', 'red', 20000);
+        debugLog('Error in init config/domain loading', { error: error.message });
         console.error('[init] Error checking for EZProxy exception URL:', error);
     }
     
@@ -1329,28 +1182,26 @@ async function init() {
         }
     });
     
-    // IMPORTANT: Also check the current page for banner display
+    // Check the current page for banner display
     // This serves as a fallback in case the background script message system fails
     // BUT only if we're not already showing a secondary banner for exception domains
-    addVisualDebug('About to check for banner display', 'magenta', 15000);
-    console.log('[init] Checking current page for banner display...');
+    debugLog('Checking current page for banner display');
     try {
         const currentUrl = window.location.href;
         
         // If we showed a secondary banner for an exception domain, skip the regular banner check
         if (!ezproxyMatch) {
-            addVisualDebug('Calling checkAndShowBanner', 'yellow', 15000);
+            debugLog('Calling checkAndShowBanner');
             await checkAndShowBanner(currentUrl);
         } else {
-            addVisualDebug('Skipping banner check - exception domain', 'orange', 15000);
-            console.log('[init] Skipping regular banner check because secondary banner was shown for exception domain');
+            debugLog('Skipping regular banner check - secondary banner shown for exception domain');
         }
     } catch (error) {
-        addVisualDebug('Error in checkAndShowBanner', 'red', 20000);
+        debugLog('Error in checkAndShowBanner', { error: error.message });
         console.error('[init] Error checking current page for banner:', error);
     }
     
-    addVisualDebug('Init completed successfully', 'brightgreen', 15000);
+    debugLog('Init completed successfully');
     isInitialized = true;
 }
 
@@ -1359,71 +1210,32 @@ async function init() {
  * @param {string} url - The URL to check
  */
 async function checkAndShowBanner(url) {
-    console.log('🔥 [checkAndShowBanner] Starting check for URL:', url);
-    addVisualDebug('checkAndShowBanner() called', 'green', 20000);
+    debugLog('Starting banner check', { url });
     
     if (!url || typeof url !== 'string') {
-        console.error('[checkAndShowBanner] Invalid URL provided:', url);
-        addVisualDebug('ERROR: Invalid URL provided', 'red', 20000);
+        debugLog('Invalid URL provided', { url });
         return;
     }
     
     try {
-        addVisualDebug('ENTERED TRY BLOCK', 'orange', 20000);
-        
-        // DEBUGGING: Special debug for ft.com at start of function (moved inside try-catch)
+        // Parse URL to get hostname
         let hostname;
         try {
-            addVisualDebug('About to parse URL', 'yellow', 20000);
             hostname = new URL(url).hostname.toLowerCase();
-            addVisualDebug(`URL parsed successfully: ${hostname}`, 'lightgreen', 20000);
+            debugLog('URL parsed successfully', { hostname });
         } catch (e) {
-            console.error('[checkAndShowBanner] Error parsing URL for hostname:', url, e);
-            addVisualDebug('ERROR: Failed to parse URL', 'red', 20000);
+            debugLog('Failed to parse URL', { url, error: e.message });
             return;
         }
-        
-        if (hostname.includes('ft.com')) {
-            console.log('🔍 [checkAndShowBanner] DEBUGGING: ft.com detected!');
-            console.log('🔍 [checkAndShowBanner] URL:', url);
-            console.log('🔍 [checkAndShowBanner] Hostname:', hostname);
-            addVisualDebug('ft.com detected in checkAndShowBanner', 'lime', 25000);
-            
-            // Add visual debug feedback for ft.com banner check
-            try {
-                const ftBannerDebugDiv = document.createElement('div');
-                ftBannerDebugDiv.style.cssText = `
-                    position: fixed !important;
-                    top: 100px !important;
-                    right: 0 !important;
-                    background: green !important;
-                    color: white !important;
-                    padding: 10px !important;
-                    z-index: 2147483645 !important;
-                    font-family: monospace !important;
-                    font-size: 11px !important;
-                    max-width: 250px !important;
-                    border: 2px solid lime !important;
-                `;
-                ftBannerDebugDiv.textContent = `FT.COM DEBUG: checkAndShowBanner() running...`;
-                if (document.body) {
-                    document.body.appendChild(ftBannerDebugDiv);
-                }
-            } catch (e) {
-                console.error('Error creating ft.com banner debug div:', e);
-            }
-        }
         // Step 1: Load configuration
-        console.log('[checkAndShowBanner] Step 1: Loading configuration...');
-        addVisualDebug('REACHED STEP 1: Loading config...', 'cyan', 20000);
+        debugLog('Loading configuration');
         
         const config = await getConfig().catch(err => {
-            console.error('[checkAndShowBanner] Failed to load config:', err);
-            addVisualDebug('ERROR: Failed to load config', 'red', 20000);
+            debugLog('Failed to load config', { error: err.message });
             throw new Error('Failed to load extension configuration');
         });
         
-        addVisualDebug('Step 1: Config loaded successfully', 'lightgreen', 15000);
+        debugLog('Configuration loaded successfully');
         
         if (!config) {
             console.error('[checkAndShowBanner] No configuration loaded');
@@ -1437,39 +1249,31 @@ async function checkAndShowBanner(url) {
         });
         
         // Step 2: Load domain list
-        console.log('[checkAndShowBanner] Step 2: Loading domain list...');
-        addVisualDebug('Step 2: Loading domain list...', 'teal', 15000);
+        debugLog('Loading domain list');
         
         const domainList = await getDomainList().catch(err => {
-            console.error('[checkAndShowBanner] Failed to load domain list:', err);
-            addVisualDebug('ERROR: Failed to load domain list', 'red', 20000);
+            debugLog('Failed to load domain list', { error: err.message });
             throw new Error('Failed to load domain list');
         });
         
-        addVisualDebug('Step 2: Domain list loaded successfully', 'lightgreen', 15000);
+        debugLog('Domain list loaded successfully', { count: domainList.length });
         
         console.log(`[checkAndShowBanner] Domain list loaded with ${domainList.length} entries`);
         
-        // Step 3: Parse and validate URL
-        console.log('[checkAndShowBanner] Step 3: Parsing URL...');
-        addVisualDebug('Step 3: Parsing URL...', 'teal', 15000);
-        
+        // Step 3: Extract domain from URL
         let domain;
         try {
             const urlObj = new URL(url);
             domain = urlObj.hostname;
-            console.log('[checkAndShowBanner] Extracted domain:', domain);
-            addVisualDebug(`Step 3: Extracted domain: ${domain}`, 'lightgreen', 15000);
+            debugLog('Extracted domain from URL', { domain });
             
             // Check for IP address (skip if it's an IP)
             if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain)) {
-                console.log('[checkAndShowBanner] IP address detected, skipping banner check');
-                addVisualDebug('Step 3: IP address detected, skipping', 'yellow', 15000);
+                debugLog('IP address detected, skipping banner check');
                 return;
             }
         } catch (e) {
-            console.error('[checkAndShowBanner] Invalid URL:', url, 'Error:', e);
-            addVisualDebug('ERROR: Invalid URL in step 3', 'red', 20000);
+            debugLog('Invalid URL in domain extraction', { url, error: e.message });
             return;
         }
         
@@ -1591,8 +1395,8 @@ async function checkAndShowBanner(url) {
             throw e; // Re-throw to be caught by the outer try-catch
         }
     } catch (error) {
+        debugLog('Unhandled error in checkAndShowBanner', { error: error.message || error.toString() });
         console.error('[checkAndShowBanner] Unhandled error:', error);
-        addVisualDebug(`ERROR: ${error.message || error.toString()}`, 'red', 30000);
         // Try to show a generic error banner if possible
         try {
             const errorBanner = document.createElement('div');
@@ -1641,12 +1445,12 @@ async function checkAndShowBanner(url) {
 }
 
 // Initialize when DOM is fully loaded
-addVisualDebug('Setting up init', 'purple', 20000);
+debugLog('Setting up initialization');
 if (document.readyState === 'loading') {
-    addVisualDebug('DOM loading, waiting for ready', 'blue', 20000);
+    debugLog('DOM loading, waiting for ready');
     document.addEventListener('DOMContentLoaded', init);
 } else {
-    addVisualDebug('DOM ready, calling init immediately', 'blue', 20000);
+    debugLog('DOM ready, calling init immediately');
     init();
 }
 
