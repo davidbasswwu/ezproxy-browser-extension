@@ -11,6 +11,23 @@ const statusDiv = document.getElementById('status');
 const accessButton = document.getElementById('accessButton');
 const resetButton = document.getElementById('resetDismissed');
 
+// Production logging helper - only logs in development mode
+function debugLog(message, data = null) {
+    try {
+        // Only log in development or when debugging is explicitly enabled
+        const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
+        if (isDebugMode) {
+            if (data) {
+                debugLog(`[EZProxy-Popup] ${message}`, data);
+            } else {
+                debugLog(`[EZProxy-Popup] ${message}`);
+            }
+        }
+    } catch (e) {
+        // Silently fail if logging fails
+    }
+}
+
 // Check the current tab's status when popup opens
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -18,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateStatus('Checking current page...', false);
         
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        console.log('Current tab:', tab);
+        debugLog('Current tab:', tab);
         
         if (!tab || !tab.url) {
             console.error('No tab or URL found');
@@ -26,11 +43,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         
-        console.log('Checking URL:', tab.url);
+        debugLog('Checking URL:', tab.url);
         
         // Check if current URL is in the domain list or exception list
         const domainList = await getDomainList();
-        console.log('Domain list loaded, length:', domainList.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
+        debugLog('Domain list loaded, length:', domainList.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
         
         if (!domainList || domainList.length === 0) {
             console.error('Domain list is empty or failed to load');
@@ -39,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         const currentUrl = new URL(tab.url);
-        console.log('Current hostname:', currentUrl.hostname);
+        debugLog('Current hostname:', currentUrl.hostname);
 
         // Load config for EZProxy base and help URL (ensure defined before using)
         const config = await (await fetch(chrome.runtime.getURL('config.json'))).json();
@@ -86,11 +103,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check if domain matches any in the list
         const isDomainInList = domainList.some(domain => {
             const matches = currentUrl.hostname.endsWith(domain) || currentUrl.hostname === domain;
-            if (matches) console.log('Match found with domain:', domain);
+            if (matches) debugLog('Match found with domain:', domain);
             return matches;
         });
         
-        console.log('Is domain in list:', isDomainInList);
+        debugLog('Is domain in list:', isDomainInList);
         
         if (!isDomainInList) {
             updateStatus('Current page is not a known library resource', false);
@@ -100,13 +117,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check if domain is dismissed
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
-        console.log('Checking dismissed domains:', dismissedDomains);
+        debugLog('Checking dismissed domains:', dismissedDomains);
         
         // Find the specific dismissed domain that matches the current hostname
         const matchingDismissedDomain = dismissedDomains.find(d => 
             currentUrl.hostname.endsWith(d) || currentUrl.hostname === d
         );
-        console.log('Matching dismissed domain:', matchingDismissedDomain);
+        debugLog('Matching dismissed domain:', matchingDismissedDomain);
         
         const isDismissed = !!matchingDismissedDomain;
         
@@ -115,10 +132,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             accessButton.disabled = false;
             accessButton.textContent = 'Show Banner Again';
             accessButton.onclick = async () => {
-                console.log('Show Banner Again button clicked for domain:', currentUrl.hostname);
+                debugLog('Show Banner Again button clicked for domain:', currentUrl.hostname);
                 // Store the matching domain for undismissing
                 const domainToUndismiss = matchingDismissedDomain || currentUrl.hostname;
-                console.log('Will undismiss domain:', domainToUndismiss);
+                debugLog('Will undismiss domain:', domainToUndismiss);
                 await undismissDomain(domainToUndismiss);
             };
         } else {
@@ -134,60 +151,60 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Handle reset dismissed domains button
 resetButton.addEventListener('click', async () => {
-    console.log('Reset button clicked');
+    debugLog('Reset button clicked');
     
     // Show confirmation dialog
     const confirmed = confirm('Are you sure you want to reset all dismissed domains? This will re-enable the banner for all previously dismissed domains.');
     
     if (!confirmed) {
-        console.log('Reset cancelled by user');
+        debugLog('Reset cancelled by user');
         return;
     }
     
     try {
-        console.log('Starting reset process...');
+        debugLog('Starting reset process...');
         
         // Save the original button text
         // Removed unused variable 'originalButtonText' to fix ESLint error
         
         // Clear the dismissed domains
-        console.log('Clearing dismissed domains from storage...');
+        debugLog('Clearing dismissed domains from storage...');
         await chrome.storage.local.remove(STORAGE_KEYS.DISMISSED_DOMAINS);
-        console.log('Dismissed domains cleared');
+        debugLog('Dismissed domains cleared');
         
         // Verify the domains were cleared
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
-        console.log('Storage after clear:', result);
+        debugLog('Storage after clear:', result);
         
         // Update the status
         updateStatus('Successfully reset all dismissed domains. Reloading page...', true);
         
         // Get the current active tab first
         const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        console.log('Current active tab:', currentTab);
+        debugLog('Current active tab:', currentTab);
         
         if (currentTab && currentTab.id) {
             // Reset the icon for the current tab first
-            console.log(`Updating icon for current tab ${currentTab.id}`);
+            debugLog(`Updating icon for current tab ${currentTab.id}`);
             try {
                 await chrome.runtime.sendMessage({
                     action: 'updateIcon',
                     tabId: currentTab.id,
                     isDismissed: false
                 });
-                console.log('Icon updated for current tab');
+                debugLog('Icon updated for current tab');
             } catch (error) {
                 console.error('Error updating icon for current tab:', error);
             }
             
             // Reload the current tab to show the banner
-            console.log('Reloading current tab...');
+            debugLog('Reloading current tab...');
             await chrome.tabs.reload(currentTab.id);
-            console.log('Current tab reloaded');
+            debugLog('Current tab reloaded');
         }
         
         // Reset icons for all other tabs in the background
-        console.log('Updating icons for all tabs...');
+        debugLog('Updating icons for all tabs...');
         const allTabs = await chrome.tabs.query({});
         for (const tab of allTabs) {
             if (tab.id && tab.id !== currentTab?.id) {
@@ -197,18 +214,18 @@ resetButton.addEventListener('click', async () => {
                         tabId: tab.id,
                         isDismissed: false
                     });
-                    console.log(`Updated icon for tab ${tab.id}`);
+                    debugLog(`Updated icon for tab ${tab.id}`);
                 } catch (error) {
                     console.error(`Error updating icon for tab ${tab.id}:`, error);
                 }
             }
         }
         
-        console.log('Reset process completed');
+        debugLog('Reset process completed');
         
         // Close the popup after a short delay
         setTimeout(() => {
-            console.log('Closing popup...');
+            debugLog('Closing popup...');
             window.close();
         }, 1000);
         
@@ -222,7 +239,7 @@ resetButton.addEventListener('click', async () => {
 
 // Helper function to update the status display
 function updateStatus(message, isActive) {
-    console.log(`Updating status: ${message}, isActive: ${isActive}`);
+    debugLog(`Updating status: ${message}, isActive: ${isActive}`);
     
     // Make sure the status div exists
     if (!statusDiv) {
@@ -247,9 +264,9 @@ function updateStatus(message, isActive) {
 // Helper function to get domain list
 async function getDomainList() {
     try {
-        console.log('Fetching domain list...');
+        debugLog('Fetching domain list...');
         const url = chrome.runtime.getURL('domain-list.json');
-        console.log('Domain list URL:', url);
+        debugLog('Domain list URL:', url);
         
         const response = await fetch(url);
         
@@ -271,7 +288,7 @@ async function getDomainList() {
             domainsArray = data.domains;
             EXCEPTION_DOMAINS = Array.isArray(data.exceptions) ? data.exceptions : [];
         }
-        console.log('Domain list loaded successfully, entries:', domainsArray.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
+        debugLog('Domain list loaded successfully, entries:', domainsArray.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
         return domainsArray;
     } catch (error) {
         console.error('Error loading domain list:', error);
@@ -279,7 +296,7 @@ async function getDomainList() {
         try {
             const result = await chrome.storage.local.get('ezproxy-domain-list-backup');
             const backupList = result['ezproxy-domain-list-backup'];
-            console.log('Using backup domain list from storage:', backupList ? backupList.length : 0, 'entries');
+            debugLog('Using backup domain list from storage:', backupList ? backupList.length : 0, 'entries');
             return Array.isArray(backupList) ? backupList : [];
         } catch (storageError) {
             console.error('Failed to load backup domain list:', storageError);
@@ -310,7 +327,7 @@ async function redirectToEZProxy(url) {
         const currentUrl = new URL(url);
         const ezproxyUrl = `${currentUrl.protocol}//${transformedDomain}.${config.ezproxyBaseUrl}${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
         
-        console.log('Redirecting to EZProxy URL:', ezproxyUrl);
+        debugLog('Redirecting to EZProxy URL:', ezproxyUrl);
         
         await chrome.tabs.update({ url: ezproxyUrl });
         window.close();
@@ -323,12 +340,12 @@ async function redirectToEZProxy(url) {
 // Helper function to undismiss a domain
 async function undismissDomain(domain) {
     try {
-        console.log('Undismissing domain:', domain);
+        debugLog('Undismissing domain:', domain);
         
         // Get the current list of dismissed domains
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
-        console.log('Current dismissed domains:', dismissedDomains);
+        debugLog('Current dismissed domains:', dismissedDomains);
         
         if (dismissedDomains.length === 0) {
             console.warn('No dismissed domains found in storage');
@@ -337,20 +354,20 @@ async function undismissDomain(domain) {
         }
         
         // For debugging, log each domain in the list and check if it matches
-        console.log('Checking each dismissed domain against:', domain);
+        debugLog('Checking each dismissed domain against:', domain);
         let foundMatches = [];
         
         dismissedDomains.forEach(d => {
             const endsWith = domain.endsWith(d);
             const exactMatch = domain === d;
-            console.log(`Domain: ${d}, endsWith: ${endsWith}, exactMatch: ${exactMatch}`);
+            debugLog(`Domain: ${d}, endsWith: ${endsWith}, exactMatch: ${exactMatch}`);
             
             if (exactMatch || endsWith) {
                 foundMatches.push(d);
             }
         });
         
-        console.log('Found matching dismissed domains:', foundMatches);
+        debugLog('Found matching dismissed domains:', foundMatches);
         
         if (foundMatches.length === 0) {
             console.warn('Could not find any matching dismissed domains for:', domain);
@@ -360,25 +377,25 @@ async function undismissDomain(domain) {
         
         // Remove all matching domains from the dismissed list
         const updatedDomains = dismissedDomains.filter(d => !foundMatches.includes(d));
-        console.log('Updated dismissed domains:', updatedDomains);
+        debugLog('Updated dismissed domains:', updatedDomains);
         
         // Save the updated list
         await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: updatedDomains });
-        console.log('Saved updated dismissed domains list');
+        debugLog('Saved updated dismissed domains list');
         
         // Update the extension icon to show normal state
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        console.log('Current tab:', tab);
+        debugLog('Current tab:', tab);
         
         if (tab && tab.id) {
-            console.log('Sending updateIcon message for tab:', tab.id);
+            debugLog('Sending updateIcon message for tab:', tab.id);
             try {
                 const response = await chrome.runtime.sendMessage({
                     action: 'updateIcon',
                     tabId: tab.id,
                     isDismissed: false
                 });
-                console.log('Response from updateIcon message:', response);
+                debugLog('Response from updateIcon message:', response);
             } catch (msgError) {
                 console.error('Error sending updateIcon message:', msgError);
             }
@@ -389,7 +406,7 @@ async function undismissDomain(domain) {
             accessButton.textContent = 'Access via EZProxy';
             
             // Reload the current tab to show the banner
-            console.log('Reloading tab:', tab.id);
+            debugLog('Reloading tab:', tab.id);
             await chrome.tabs.reload(tab.id);
             window.close();
         }

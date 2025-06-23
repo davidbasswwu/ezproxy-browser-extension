@@ -1,13 +1,5 @@
 // content.js
 
-// IMMEDIATE DEBUG: Log when content script loads
-console.log('🚨🚨🚨 EXTENSION CONTENT SCRIPT STARTING 🚨🚨🚨');
-console.log('🚨 CONTENT SCRIPT LOADED ON:', window.location.href);
-console.log('🚨 DOCUMENT STATE:', document.readyState);
-console.log('🚨 HOSTNAME:', window.location.hostname);
-console.log('🚨 USER AGENT:', navigator.userAgent);
-console.log('🚨 TIMESTAMP:', new Date().toISOString());
-
 // Production logging helper - only logs in development mode
 function debugLog(message, data = null) {
     try {
@@ -15,9 +7,9 @@ function debugLog(message, data = null) {
         const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
         if (isDebugMode) {
             if (data) {
-                console.log(`[EZProxy] ${message}`, data);
+                debugLog(`[EZProxy] ${message}`, data);
             } else {
-                console.log(`[EZProxy] ${message}`);
+                debugLog(`[EZProxy] ${message}`);
             }
         }
     } catch (e) {
@@ -86,9 +78,9 @@ async function getConfig() {
  */
 async function getDomainList() {
     try {
-        console.log('Fetching domain list...');
+        debugLog('Fetching domain list...');
         const url = chrome.runtime.getURL('domain-list.json');
-        console.log('Domain list URL:', url);
+        debugLog('Domain list URL:', url);
         
         const response = await fetch(url);
         
@@ -113,7 +105,7 @@ async function getDomainList() {
             EXCEPTION_DOMAINS = Array.isArray(data.exceptions) ? data.exceptions : [];
         }
 
-        console.log('Domain list loaded. Domains:', domainArray.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
+        debugLog('Domain list loaded. Domains:', domainArray.length, 'Exceptions:', EXCEPTION_DOMAINS.length);
         return domainArray;
     } catch (error) {
         console.error('Error loading domain list:', error);
@@ -121,7 +113,7 @@ async function getDomainList() {
         try {
             const result = await chrome.storage.local.get('ezproxy-domain-list-backup');
             const backupList = result['ezproxy-domain-list-backup'];
-            console.log('Using backup domain list from storage:', backupList ? backupList.length : 0, 'entries');
+            debugLog('Using backup domain list from storage:', backupList ? backupList.length : 0, 'entries');
             EXCEPTION_DOMAINS = [];
             return Array.isArray(backupList) ? backupList : [];
         } catch (storageError) {
@@ -138,7 +130,7 @@ async function getDomainList() {
  * @returns {boolean} True if institutional access is detected
  */
 async function hasInstitutionalAccess(config) {
-    console.log('[hasInstitutionalAccess] Checking if user has institutional access');
+    debugLog('[hasInstitutionalAccess] Checking if user has institutional access');
     
     if (!config) {
         console.warn('[hasInstitutionalAccess] No config provided');
@@ -151,7 +143,7 @@ async function hasInstitutionalAccess(config) {
     // // IMPORTANT: For Nature and Chronicle, we'll return false to ensure the banner shows
     // // This is a temporary fix to ensure consistent banner display
     // if (currentHostname.includes('nature.com') || currentHostname.includes('chronicle.com')) {
-    //     console.log(`[hasInstitutionalAccess] Special case for ${currentHostname}: forcing banner display`);
+    //     debugLog(`[hasInstitutionalAccess] Special case for ${currentHostname}: forcing banner display`);
     //     return false;
     // }
     
@@ -164,7 +156,7 @@ async function hasInstitutionalAccess(config) {
         
         // Method 2: If text is empty or very short, try getting text from main content areas
         if (!pageText || pageText.length < 100) {
-            console.log('[hasInstitutionalAccess] Direct text extraction yielded limited content, trying content areas');
+            debugLog('[hasInstitutionalAccess] Direct text extraction yielded limited content, trying content areas');
             const contentSelectors = [
                 'main', 'article', '.content', '.article', '#content', '#main', 
                 '[role="main"]', '[role="article"]', '.page-content'
@@ -182,7 +174,7 @@ async function hasInstitutionalAccess(config) {
         
         // Method 3: If still empty, try getting text from all paragraphs
         if (!pageText || pageText.length < 100) {
-            console.log('[hasInstitutionalAccess] Content area extraction yielded limited content, trying paragraphs');
+            debugLog('[hasInstitutionalAccess] Content area extraction yielded limited content, trying paragraphs');
             const paragraphs = document.querySelectorAll('p');
             if (paragraphs && paragraphs.length > 0) {
                 for (const p of paragraphs) {
@@ -208,7 +200,7 @@ async function hasInstitutionalAccess(config) {
     const shortName = (config.institutionShortName || '').toLowerCase();
     const libraryName = (config.institutionLibraryName || '').toLowerCase();
     
-    console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
+    debugLog('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
     // Check if this is a domain we want to debug (can be enabled via localStorage)
     const debugHostname = window.location.hostname.toLowerCase();
@@ -254,11 +246,11 @@ async function hasInstitutionalAccess(config) {
     }
     
     // Log what we're checking for
-    console.log('[hasInstitutionalAccess] Checking page for indicators:', accessIndicators);
+    debugLog('[hasInstitutionalAccess] Checking page for indicators:', accessIndicators);
     
     // Convert page text to lowercase once for case-insensitive search
     const normalizedPageText = pageText.toLowerCase();
-    console.log('[hasInstitutionalAccess] Page text sample (first 500 chars):', 
+    debugLog('[hasInstitutionalAccess] Page text sample (first 500 chars):', 
         normalizedPageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
     
     // Check for access indicators in page text
@@ -268,23 +260,23 @@ async function hasInstitutionalAccess(config) {
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
             foundIndicators.push(indicator);
-            console.log(`[hasInstitutionalAccess] FOUND INDICATOR: "${indicator}" in page text`);
+            debugLog(`[hasInstitutionalAccess] FOUND INDICATOR: "${indicator}" in page text`);
             
             // Show context around the found indicator for debugging
             const indicatorIndex = normalizedPageText.indexOf(indicator.toLowerCase());
             const contextStart = Math.max(0, indicatorIndex - 50);
             const contextEnd = Math.min(normalizedPageText.length, indicatorIndex + indicator.length + 50);
             const context = normalizedPageText.substring(contextStart, contextEnd);
-            console.log(`[hasInstitutionalAccess] CONTEXT: "...${context}..."`);
+            debugLog(`[hasInstitutionalAccess] CONTEXT: "...${context}..."`);
         }
     });
     
     if (foundIndicators.length > 0) {
         console.warn('[hasInstitutionalAccess] ⚠️  INSTITUTIONAL ACCESS DETECTED - BANNER WILL NOT SHOW');
-        console.log('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
-        console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
-        console.log('[hasInstitutionalAccess] Page title:', document.title);
-        console.log('[hasInstitutionalAccess] Full page text length:', normalizedPageText.length);
+        debugLog('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
+        debugLog('[hasInstitutionalAccess] Current URL:', window.location.href);
+        debugLog('[hasInstitutionalAccess] Page title:', document.title);
+        debugLog('[hasInstitutionalAccess] Full page text length:', normalizedPageText.length);
         return true;
     }
     
@@ -301,7 +293,7 @@ async function hasInstitutionalAccess(config) {
     ];
     
     if (ezproxyElements.length > 0) {
-        console.log(`[hasInstitutionalAccess] Found ${ezproxyElements.length} EZProxy related elements`);
+        debugLog(`[hasInstitutionalAccess] Found ${ezproxyElements.length} EZProxy related elements`);
         return true;
     }
     
@@ -321,30 +313,30 @@ async function hasInstitutionalAccess(config) {
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
             foundDeniedIndicators.push(indicator);
-            console.log(`[hasInstitutionalAccess] FOUND DENIED INDICATOR: "${indicator}" in page text`);
+            debugLog(`[hasInstitutionalAccess] FOUND DENIED INDICATOR: "${indicator}" in page text`);
         }
         return found;
     });
     
     if (isDeniedPage) {
-        console.log('[hasInstitutionalAccess] 🚫 ACCESS DENIED/LOGIN PAGE DETECTED - BANNER SHOULD SHOW');
-        console.log('[hasInstitutionalAccess] Found denied indicators:', foundDeniedIndicators);
-        console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
+        debugLog('[hasInstitutionalAccess] 🚫 ACCESS DENIED/LOGIN PAGE DETECTED - BANNER SHOULD SHOW');
+        debugLog('[hasInstitutionalAccess] Found denied indicators:', foundDeniedIndicators);
+        debugLog('[hasInstitutionalAccess] Current URL:', window.location.href);
         return false;
     }
     
-    console.log('[hasInstitutionalAccess] ✅ NO institutional access indicators found - BANNER SHOULD SHOW');
-    console.log('[hasInstitutionalAccess] Current URL:', window.location.href);
-    console.log('[hasInstitutionalAccess] Page title:', document.title);
+    debugLog('[hasInstitutionalAccess] ✅ NO institutional access indicators found - BANNER SHOULD SHOW');
+    debugLog('[hasInstitutionalAccess] Current URL:', window.location.href);
+    debugLog('[hasInstitutionalAccess] Page title:', document.title);
     return false;
 }
 
 async function isDomainDismissed(domain) {
     try {
-        console.log('Checking if domain is dismissed:', domain);
+        debugLog('Checking if domain is dismissed:', domain);
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
-        console.log('Current dismissed domains:', dismissedDomains);
+        debugLog('Current dismissed domains:', dismissedDomains);
         
         // Check if the domain matches any in the dismissed list
         // using the same logic as in popup.js
@@ -352,7 +344,7 @@ async function isDomainDismissed(domain) {
             domain.endsWith(d) || domain === d
         );
         
-        console.log('Domain dismissed status:', isDismissed);
+        debugLog('Domain dismissed status:', isDismissed);
         return isDismissed;
     } catch (error) {
         console.error('Error checking dismissed domains:', error);
@@ -363,7 +355,7 @@ async function isDomainDismissed(domain) {
 
 async function dismissDomain(domain) {
     try {
-        console.log('Dismissing domain:', domain);
+        debugLog('Dismissing domain:', domain);
         const result = await chrome.storage.local.get(STORAGE_KEYS.DISMISSED_DOMAINS);
         const dismissedDomains = result[STORAGE_KEYS.DISMISSED_DOMAINS] || [];
         
@@ -373,10 +365,10 @@ async function dismissDomain(domain) {
         );
         
         if (existingDomain) {
-            console.log('Domain or parent domain already in dismissed list:', existingDomain);
+            debugLog('Domain or parent domain already in dismissed list:', existingDomain);
         } else {
             dismissedDomains.push(domain);
-            console.log('Saving dismissed domains:', dismissedDomains);
+            debugLog('Saving dismissed domains:', dismissedDomains);
             await chrome.storage.local.set({ [STORAGE_KEYS.DISMISSED_DOMAINS]: dismissedDomains });
         }
         
@@ -399,13 +391,13 @@ async function dismissDomain(domain) {
             
             // Method 2: If we couldn't get tabId, use a message to the background script
             if (!tabId) {
-                console.log('No tab ID available, using background script to update icon');
+                debugLog('No tab ID available, using background script to update icon');
                 await chrome.runtime.sendMessage({
                     action: 'dismissDomain',
                     domain: domain
                 });
             } else {
-                console.log('Updating icon for tab:', tabId);
+                debugLog('Updating icon for tab:', tabId);
                 // Update the icon directly if we have the tab ID
                 await chrome.runtime.sendMessage({
                     action: 'updateIcon',
@@ -1220,7 +1212,7 @@ async function checkAndShowBanner(url) {
             return;
         }
         
-        console.log('[checkAndShowBanner] Config loaded:', {
+        debugLog('[checkAndShowBanner] Config loaded:', {
             institutionName: config.institutionName,
             ezproxyBaseUrl: config.ezproxyBaseUrl ? '***' : 'Not set',
             hasAccessIndicators: Array.isArray(config.accessIndicators) ? config.accessIndicators.length : 0
@@ -1236,7 +1228,7 @@ async function checkAndShowBanner(url) {
         
         debugLog('Domain list loaded successfully', { count: domainList.length });
         
-        console.log(`[checkAndShowBanner] Domain list loaded with ${domainList.length} entries`);
+        debugLog(`[checkAndShowBanner] Domain list loaded with ${domainList.length} entries`);
         
         // Step 3: Extract domain from URL
         let domain;
@@ -1256,9 +1248,9 @@ async function checkAndShowBanner(url) {
         }
         
         // Step 4: Check domain against domain list
-        console.log('[checkAndShowBanner] Step 4: Checking domain against domain list...');
-        console.log('[checkAndShowBanner] Domain to match:', domain);
-        console.log('[checkAndShowBanner] Domain list length:', domainList.length);
+        debugLog('[checkAndShowBanner] Step 4: Checking domain against domain list...');
+        debugLog('[checkAndShowBanner] Domain to match:', domain);
+        debugLog('[checkAndShowBanner] Domain list length:', domainList.length);
         
 
         
@@ -1266,13 +1258,13 @@ async function checkAndShowBanner(url) {
             const exactMatch = domain === d;
             const subdomainMatch = domain.endsWith('.' + d);
             
-            console.log(`[checkAndShowBanner] Checking ${d}: exact=${exactMatch}, subdomain=${subdomainMatch}`);
+            debugLog(`[checkAndShowBanner] Checking ${d}: exact=${exactMatch}, subdomain=${subdomainMatch}`);
             
             return exactMatch || subdomainMatch;
         });
         
         if (!matchedDomain) {
-            console.log('[checkAndShowBanner] Domain not in list, updating icon to normal state');
+            debugLog('[checkAndShowBanner] Domain not in list, updating icon to normal state');
             
 
             
@@ -1292,12 +1284,12 @@ async function checkAndShowBanner(url) {
             return;
         }
         
-        console.log('[checkAndShowBanner] Matched domain in list:', matchedDomain);
+        debugLog('[checkAndShowBanner] Matched domain in list:', matchedDomain);
         
 
         
         // Step 5: Check if domain is dismissed
-        console.log('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
+        debugLog('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
         const isDismissed = await isDomainDismissed(matchedDomain).catch(err => {
             console.error('[checkAndShowBanner] Error checking if domain is dismissed:', err);
             return false; // Default to not dismissed on error
@@ -1307,7 +1299,7 @@ async function checkAndShowBanner(url) {
         debugLog(`Domain dismiss check completed`, { domain: matchedDomain, isDismissed });
         
         if (isDismissed) {
-            console.log('[checkAndShowBanner] Domain is dismissed, updating icon to dismissed state');
+            debugLog('[checkAndShowBanner] Domain is dismissed, updating icon to dismissed state');
             
             debugLog('Domain is dismissed, skipping banner display', { domain: matchedDomain });
             
@@ -1327,30 +1319,30 @@ async function checkAndShowBanner(url) {
         }
         
         // Step 6: Check for institutional access
-        console.log('[checkAndShowBanner] Step 6: Checking for institutional access...');
+        debugLog('[checkAndShowBanner] Step 6: Checking for institutional access...');
         try {
             const hasAccess = await hasInstitutionalAccess(config);
             
             debugLog('Institutional access check completed', { domain: matchedDomain, hasAccess });
             
             if (hasAccess) {
-                console.log('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
+                debugLog('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
                 
                 debugLog('User has institutional access, skipping banner', { domain: matchedDomain });
                 
                 return;
             }
-            console.log('[checkAndShowBanner] No institutional access detected, proceeding with banner check');
+            debugLog('[checkAndShowBanner] No institutional access detected, proceeding with banner check');
         } catch (e) {
             console.error('[checkAndShowBanner] Error checking institutional access:', e);
             // Continue with banner display if we can't determine access
         }
         
         // Step 7: Double-check if domain was dismissed (race condition protection)
-        console.log('[checkAndShowBanner] Step 7: Verifying domain is still not dismissed...');
+        debugLog('[checkAndShowBanner] Step 7: Verifying domain is still not dismissed...');
         const isStillDismissed = await isDomainDismissed(matchedDomain).catch(() => false);
         if (isStillDismissed) {
-            console.log('[checkAndShowBanner] Domain was dismissed during processing, aborting');
+            debugLog('[checkAndShowBanner] Domain was dismissed during processing, aborting');
             return;
         }
         
@@ -1455,7 +1447,7 @@ if (document.readyState === 'loading') {
 // Enhanced message listener with auto-redirect support
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'DOMAIN_MATCH') {
-        console.log('[onMessage] Received DOMAIN_MATCH message for:', message.domain);
+        debugLog('[onMessage] Received DOMAIN_MATCH message for:', message.domain);
         
         // Process the message asynchronously but respond immediately
         // to prevent connection issues
@@ -1471,7 +1463,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 return isDomainDismissed(message.domain)
                     .then(dismissed => {
                         if (dismissed) {
-                            console.log('[onMessage] Domain was previously dismissed, skipping notification');
+                            debugLog('[onMessage] Domain was previously dismissed, skipping notification');
                             throw new Error('DOMAIN_DISMISSED');
                         }
                         return configData;
@@ -1482,7 +1474,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 try {
                     const hasAccess = await hasInstitutionalAccess(config);
                     if (hasAccess) {
-                        console.log('[onMessage] User has institutional access, skipping EZProxy notification');
+                        debugLog('[onMessage] User has institutional access, skipping EZProxy notification');
                         throw new Error('HAS_INSTITUTIONAL_ACCESS');
                     }
                     return config;
@@ -1500,7 +1492,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 return shouldAutoRedirect()
                     .then(shouldRedirect => {
                         if (shouldRedirect) {
-                            console.log('[onMessage] Auto-redirect enabled, redirecting to EZProxy');
+                            debugLog('[onMessage] Auto-redirect enabled, redirecting to EZProxy');
                             window.location.href = message.ezproxyUrl;
                             throw new Error('AUTO_REDIRECTED');
                         }
@@ -1509,7 +1501,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
             .then(config => {
                 // Finally, show the banner
-                console.log('[onMessage] Showing banner for:', message.domain);
+                debugLog('[onMessage] Showing banner for:', message.domain);
                 createBanner(
                     message.bannerMessage || `This resource is available through ${config.institutionLibraryName || 'your library'}. Access the full content via EZProxy.`,
                     message.ezproxyUrl,

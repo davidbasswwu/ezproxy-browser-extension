@@ -10,6 +10,23 @@ const MIN_UPDATE_INTERVAL = 60000; // 1 minute
 // Cache for transformed URLs to improve performance
 const urlTransformCache = new Map();
 
+// Production logging helper - only logs in development mode
+function debugLog(message, data = null) {
+    try {
+        // Only log in development or when debugging is explicitly enabled
+        const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
+        if (isDebugMode) {
+            if (data) {
+                console.log(`[EZProxy-BG] ${message}`, data);
+            } else {
+                console.log(`[EZProxy-BG] ${message}`);
+            }
+        }
+    } catch (e) {
+        // Silently fail if logging fails
+    }
+}
+
 async function loadConfig() {
     try {
         const configUrl = chrome.runtime.getURL('config.json');
@@ -80,7 +97,7 @@ async function loadLocalDomainList() {
         } else if (domains && Array.isArray(domains.domains)) {
             // New format: structured object with domains and exceptions
             domainArray = domains.domains;
-            console.log('Local domain list has structured format with', domainArray.length, 'domains and', 
+            debugLog('Local domain list has structured format with', domainArray.length, 'domains and', 
                        (domains.exceptions || []).length, 'exceptions');
         } else {
             throw new Error('Domain list must be an array or structured object with domains array');
@@ -105,11 +122,11 @@ async function fetchWithRetry(url, maxRetries = CONFIG.retryAttempts, retryDelay
             return response;
         } catch (error) {
             lastError = error;
-            console.log(`Fetch attempt ${attempt}/${maxRetries} failed:`, error.message);
+            debugLog(`Fetch attempt ${attempt}/${maxRetries} failed:`, error.message);
             
             if (attempt < maxRetries) {
                 const delay = retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
-                console.log(`Retrying in ${delay}ms...`);
+                debugLog(`Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
@@ -124,7 +141,7 @@ async function updateDomainList() {
         const stored = await chrome.storage.local.get(['domainList', 'lastUpdate']);
         if (stored.domainList && Array.isArray(stored.domainList)) {
             DOMAIN_LIST = new Set(stored.domainList);
-            console.log(`Domain list loaded from storage (${DOMAIN_LIST.size} domains)`);
+            debugLog(`Domain list loaded from storage (${DOMAIN_LIST.size} domains)`);
             
             // Check if we need to update based on interval
             const now = Date.now();
@@ -132,13 +149,13 @@ async function updateDomainList() {
             const timeSinceUpdate = now - lastUpdate;
             
             if (timeSinceUpdate < CONFIG.updateInterval) {
-                console.log(`Domain list is up to date (last updated ${Math.round(timeSinceUpdate / 1000 / 60)} minutes ago)`);
+                debugLog(`Domain list is up to date (last updated ${Math.round(timeSinceUpdate / 1000 / 60)} minutes ago)`);
                 return;
             }
         }
 
         // If we get here, we need to fetch a fresh list
-        console.log('Fetching remote domain list from:', CONFIG.domainListUrl);
+        debugLog('Fetching remote domain list from:', CONFIG.domainListUrl);
         const response = await fetchWithRetry(CONFIG.domainListUrl, CONFIG.retryAttempts, CONFIG.retryDelay);
         
         if (!response.ok) {
@@ -155,7 +172,7 @@ async function updateDomainList() {
         } else if (domains && Array.isArray(domains.domains)) {
             // New format: structured object with domains and exceptions
             domainArray = domains.domains;
-            console.log('Remote domain list has structured format with', domainArray.length, 'domains and', 
+            debugLog('Remote domain list has structured format with', domainArray.length, 'domains and', 
                        (domains.exceptions || []).length, 'exceptions');
         } else {
             throw new Error('Remote domain list is neither an array nor a valid structured object');
@@ -190,19 +207,19 @@ async function updateDomainList() {
         // Clear URL transform cache when domain list updates
         urlTransformCache.clear();
         
-        console.log(`Domain list updated successfully (${DOMAIN_LIST.size} domains)`);
+        debugLog(`Domain list updated successfully (${DOMAIN_LIST.size} domains)`);
         return true;
     } catch (error) {
         console.error('Error updating domain list:', error);
         
         // If we don't have a domain list yet, try to load the local fallback
         if (DOMAIN_LIST.size === 0) {
-            console.log('Attempting to load local domain list as fallback...');
+            debugLog('Attempting to load local domain list as fallback...');
             try {
                 const localDomains = await loadLocalDomainList();
                 if (localDomains.size > 0) {
                     DOMAIN_LIST = localDomains;
-                    console.log(`Loaded ${localDomains.size} domains from local fallback`);
+                    debugLog(`Loaded ${localDomains.size} domains from local fallback`);
                     return true;
                 }
             } catch (localError) {
@@ -215,7 +232,7 @@ async function updateDomainList() {
         }
         
         // If we have an existing domain list, we can continue using it
-        console.log(`Using existing domain list (${DOMAIN_LIST.size} domains)`);
+        debugLog(`Using existing domain list (${DOMAIN_LIST.size} domains)`);
         return false;
     }
 }
@@ -281,7 +298,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 // Listen for messages from content scripts and popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Received message in background:', request.action || 'unknown action', request);
+    debugLog('Received message in background:', request.action || 'unknown action', request);
     
     // Handle updateIcon action
     if (request.action === 'updateIcon') {
@@ -296,14 +313,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     // Handle dismissDomain action
     if (request.action === 'dismissDomain') {
-        console.log('Handling dismissDomain for domain:', request.domain);
+        debugLog('Handling dismissDomain for domain:', request.domain);
         // Get the current active tab to update its icon
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (tabs && tabs[0] && tabs[0].id) {
-                console.log('Updating icon for tab:', tabs[0].id);
+                debugLog('Updating icon for tab:', tabs[0].id);
                 updateExtensionIcon(tabs[0].id, true)
                     .then(() => {
-                        console.log('Icon updated successfully after domain dismissal');
+                        debugLog('Icon updated successfully after domain dismissal');
                         sendResponse({ success: true });
                     })
                     .catch(error => {
@@ -320,13 +337,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     // Handle clearDismissedDomain action
     if (request.action === 'clearDismissedDomain') {
-        console.log('Clearing dismissed status for domain:', request.domain);
+        debugLog('Clearing dismissed status for domain:', request.domain);
         chrome.storage.local.get(['dismissedDomains'], (result) => {
             const dismissedDomains = result.dismissedDomains || {};
             if (dismissedDomains[request.domain]) {
                 delete dismissedDomains[request.domain];
                 chrome.storage.local.set({ dismissedDomains }, () => {
-                    console.log('Cleared dismissed status for domain:', request.domain);
+                    debugLog('Cleared dismissed status for domain:', request.domain);
                     // Update icon to normal state
                     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                         if (tabs && tabs[0] && tabs[0].id) {
@@ -344,7 +361,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     });
                 });
             } else {
-                console.log('Domain was not dismissed:', request.domain);
+                debugLog('Domain was not dismissed:', request.domain);
                 sendResponse({ success: true });
             }
         });
@@ -387,25 +404,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Test function to verify icon updates
 async function testIconUpdate() {
-    console.log('Testing icon update functionality...');
+    debugLog('Testing icon update functionality...');
     
     // Try to get the current tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs && tabs[0] && tabs[0].id) {
         const tabId = tabs[0].id;
-        console.log(`Found active tab: ${tabId}`);
+        debugLog(`Found active tab: ${tabId}`);
         
         // Test setting the dismissed icon
         try {
-            console.log('Setting dismissed icon...');
+            debugLog('Setting dismissed icon...');
             await updateExtensionIcon(tabId, true);
-            console.log('Dismissed icon set successfully');
+            debugLog('Dismissed icon set successfully');
             
             // Set a timeout to reset the icon after 3 seconds
             setTimeout(async () => {
-                console.log('Resetting to normal icon...');
+                debugLog('Resetting to normal icon...');
                 await updateExtensionIcon(tabId, false);
-                console.log('Normal icon restored');
+                debugLog('Normal icon restored');
             }, 3000);
             
         } catch (error) {
@@ -418,7 +435,7 @@ async function testIconUpdate() {
 
 // Helper function to update the extension icon
 async function updateExtensionIcon(tabId, isDismissed) {
-    console.log(`[updateExtensionIcon] Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
+    debugLog(`[updateExtensionIcon] Updating icon for tab ${tabId}, isDismissed: ${isDismissed}`);
     
     // Define icon paths - using chrome.runtime.getURL() for proper resource loading
     const getIconPath = (size, dismissed = false) => 
@@ -431,9 +448,9 @@ async function updateExtensionIcon(tabId, isDismissed) {
         '128': chrome.runtime.getURL('images/icon-128.png')
     };
     
-    console.log('Using icon paths:', icons);
+    debugLog('Using icon paths:', icons);
     
-    console.log('[updateExtensionIcon] Using icon paths:', icons);
+    debugLog('[updateExtensionIcon] Using icon paths:', icons);
     
     // Set the title based on dismissed state
     const title = isDismissed 
@@ -443,20 +460,20 @@ async function updateExtensionIcon(tabId, isDismissed) {
     try {
         // First try to update the tab-specific icon
         if (tabId) {
-            console.log(`[updateExtensionIcon] Updating icon for specific tab ${tabId}`);
+            debugLog(`[updateExtensionIcon] Updating icon for specific tab ${tabId}`);
             try {
                 await chrome.action.setIcon({
                     tabId: tabId,
                     path: icons
                 });
-                console.log(`[updateExtensionIcon] Successfully updated tab ${tabId} icon`);
+                debugLog(`[updateExtensionIcon] Successfully updated tab ${tabId} icon`);
                 
                 // Also update the title
                 await chrome.action.setTitle({
                     tabId: tabId,
                     title: title
                 });
-                console.log(`[updateExtensionIcon] Set title for tab ${tabId}: ${title}`);
+                debugLog(`[updateExtensionIcon] Set title for tab ${tabId}: ${title}`);
                 
                 // Also update the badge
                 await chrome.action.setBadgeText({
@@ -478,7 +495,7 @@ async function updateExtensionIcon(tabId, isDismissed) {
         }
         
         // If we get here, either tabId wasn't provided or tab-specific update failed
-        console.log('[updateExtensionIcon] Updating global icon');
+        debugLog('[updateExtensionIcon] Updating global icon');
         await chrome.action.setIcon({
             tabId: undefined, // Update global icon
             path: icons
@@ -490,7 +507,7 @@ async function updateExtensionIcon(tabId, isDismissed) {
             title: title
         });
         
-        console.log('[updateExtensionIcon] Successfully updated global icon and title');
+        debugLog('[updateExtensionIcon] Successfully updated global icon and title');
         
     } catch (error) {
         console.error('[updateExtensionIcon] Error in updateExtensionIcon:', error);
