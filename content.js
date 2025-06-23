@@ -504,13 +504,13 @@ function restorePageMargin() {
  * @returns {Promise<void>}
  */
 async function createBanner(message, ezproxyUrl, domain) {
-    addVisualDebug('createBanner() function started', 'cyan', 20000);
+    debugLog('createBanner() function started', { domain });
     
     // Get the current configuration
     const config = await getConfig();
     const bannerConfig = config.banner || {};
     
-    addVisualDebug('createBanner: got config', 'lightblue', 20000);
+    debugLog('createBanner: got config');
     
     // Remove existing banner if any
     const existingBanner = document.getElementById(BANNER_ID);
@@ -792,7 +792,7 @@ async function createBanner(message, ezproxyUrl, domain) {
         redirectButton.focus();
     }, prefersReducedMotion ? 0 : 100);
     
-    addVisualDebug('createBanner: function completed successfully!', 'brightgreen', 25000);
+    debugLog('createBanner: function completed successfully');
 }
 
 // Remove banner notification
@@ -1379,19 +1379,17 @@ async function checkAndShowBanner(url) {
         console.log('[checkAndShowBanner] Created EZProxy URL:', ezproxyUrl);
         
         // Step 9: Create and show the banner
-        console.log('[checkAndShowBanner] Step 9: Creating banner...');
-        addVisualDebug('About to create banner', 'yellow', 20000);
+        debugLog('Creating banner', { domain: matchedDomain, ezproxyUrl });
         try {
             await createBanner(
                 bannerMessage,
                 ezproxyUrl,
                 matchedDomain
             );
-            console.log('[checkAndShowBanner] Banner creation completed successfully');
-            addVisualDebug('Banner created successfully!', 'brightgreen', 25000);
+            debugLog('Banner creation completed successfully');
         } catch (e) {
+            debugLog('Banner creation failed', { error: e.message });
             console.error('[checkAndShowBanner] Error creating banner:', e);
-            addVisualDebug('Banner creation FAILED', 'red', 25000);
             throw e; // Re-throw to be caught by the outer try-catch
         }
     } catch (error) {
