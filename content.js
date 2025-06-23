@@ -179,10 +179,10 @@ async function hasInstitutionalAccess(config) {
     console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
     // DEBUGGING: Special debug for ft.com
-    const currentHostname = window.location.hostname.toLowerCase();
-    if (currentHostname.includes('ft.com')) {
+    const debugHostname = window.location.hostname.toLowerCase();
+    if (debugHostname.includes('ft.com')) {
         console.log('🔍 [hasInstitutionalAccess] DEBUGGING: ft.com detected!');
-        console.log('🔍 [hasInstitutionalAccess] Current hostname:', currentHostname);
+        console.log('🔍 [hasInstitutionalAccess] Current hostname:', debugHostname);
         console.log('🔍 [hasInstitutionalAccess] Current URL:', window.location.href);
         console.log('🔍 [hasInstitutionalAccess] Page text length:', pageText.length);
         console.log('🔍 [hasInstitutionalAccess] First 500 chars:', pageText.substring(0, 500));
@@ -1055,6 +1055,18 @@ async function removeSecondaryBanner() {
  * Initialize the content script
  */
 async function init() {
+    console.log('🚀 [init] Content script starting...');
+    console.log('🚀 [init] Current URL:', window.location.href);
+    console.log('🚀 [init] Current hostname:', window.location.hostname);
+    
+    // DEBUGGING: Special early check for ft.com
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname.includes('ft.com')) {
+        console.log('🔍 [init] DEBUGGING: ft.com detected in init!');
+        console.log('🔍 [init] isInitialized:', isInitialized);
+        console.log('🔍 [init] Document readyState:', document.readyState);
+    }
+    
     if (isInitialized) return;
     
     // Ensure domain list and config are loaded before checking exception URL
@@ -1125,7 +1137,15 @@ async function init() {
  * @param {string} url - The URL to check
  */
 async function checkAndShowBanner(url) {
-    console.log('[checkAndShowBanner] Starting check for URL:', url);
+    console.log('🔥 [checkAndShowBanner] Starting check for URL:', url);
+    
+    // DEBUGGING: Special debug for ft.com at start of function
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (hostname.includes('ft.com')) {
+        console.log('🔍 [checkAndShowBanner] DEBUGGING: ft.com detected!');
+        console.log('🔍 [checkAndShowBanner] URL:', url);
+        console.log('🔍 [checkAndShowBanner] Hostname:', hostname);
+    }
     
     if (!url || typeof url !== 'string') {
         console.error('[checkAndShowBanner] Invalid URL provided:', url);
