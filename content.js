@@ -1,9 +1,77 @@
 // content.js
 
 // IMMEDIATE DEBUG: Log when content script loads
+console.log('🚨🚨🚨 EXTENSION CONTENT SCRIPT STARTING 🚨🚨🚨');
 console.log('🚨 CONTENT SCRIPT LOADED ON:', window.location.href);
 console.log('🚨 DOCUMENT STATE:', document.readyState);
 console.log('🚨 HOSTNAME:', window.location.hostname);
+console.log('🚨 USER AGENT:', navigator.userAgent);
+console.log('🚨 TIMESTAMP:', new Date().toISOString());
+
+// AGGRESSIVE DEBUG: Try multiple logging methods to bypass console filtering
+try {
+    // Method 1: Standard console methods
+    console.info('INFO: Extension loaded');
+    console.warn('WARN: Extension loaded');
+    console.error('ERROR: Extension loaded');
+    
+    // Method 2: Create table for visibility
+    console.table([{
+        Extension: 'EZProxy Extension',
+        Status: 'LOADED',
+        URL: window.location.href,
+        Hostname: window.location.hostname
+    }]);
+    
+    // Method 3: Visual debugging with enhanced visibility
+    const testDiv = document.createElement('div');
+    testDiv.id = 'extension-test-marker';
+    testDiv.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        right: 0 !important;
+        background: red !important;
+        color: white !important;
+        padding: 15px !important;
+        z-index: 2147483647 !important;
+        font-family: monospace !important;
+        font-size: 12px !important;
+        line-height: 1.2 !important;
+        max-width: 300px !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+        border: 2px solid yellow !important;
+    `;
+    
+    const currentTime = new Date().toLocaleTimeString();
+    testDiv.innerHTML = `
+        <div>🚨 EXTENSION LOADED</div>
+        <div>Time: ${currentTime}</div>
+        <div>Host: ${window.location.hostname}</div>
+        <div style="font-size:10px;">Check Console for Messages</div>
+    `;
+    
+    // Try multiple ways to add the element
+    if (document.body) {
+        document.body.appendChild(testDiv);
+    } else if (document.documentElement) {
+        document.documentElement.appendChild(testDiv);
+    } else {
+        // Fallback: wait for DOM
+        setTimeout(() => {
+            if (document.body) {
+                document.body.appendChild(testDiv);
+            }
+        }, 100);
+    }
+    
+    console.log('🚨 Enhanced test div added to page');
+    
+    // Method 4: Alert as last resort (but commented out to avoid interruption)
+    // alert('EZProxy Extension Loaded - Check Console');
+    
+} catch (e) {
+    console.log('🚨 Error in aggressive debug:', e);
+}
 
 // Constants
 const BANNER_ID = 'ezproxy-banner';
@@ -183,7 +251,7 @@ async function hasInstitutionalAccess(config) {
     
     console.log('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
-    // DEBUGGING: Special debug for ft.com
+    // DEBUGGING: Special debug for ft.com with visual feedback
     const debugHostname = window.location.hostname.toLowerCase();
     if (debugHostname.includes('ft.com')) {
         console.log('🔍 [hasInstitutionalAccess] DEBUGGING: ft.com detected!');
@@ -192,6 +260,31 @@ async function hasInstitutionalAccess(config) {
         console.log('🔍 [hasInstitutionalAccess] Page text length:', pageText.length);
         console.log('🔍 [hasInstitutionalAccess] First 500 chars:', pageText.substring(0, 500));
         console.log('🔍 [hasInstitutionalAccess] FORCING BANNER DISPLAY for ft.com debugging');
+        
+        // Add visual debug feedback for ft.com
+        try {
+            const ftDebugDiv = document.createElement('div');
+            ftDebugDiv.style.cssText = `
+                position: fixed !important;
+                top: 50px !important;
+                right: 0 !important;
+                background: blue !important;
+                color: white !important;
+                padding: 10px !important;
+                z-index: 2147483646 !important;
+                font-family: monospace !important;
+                font-size: 11px !important;
+                max-width: 250px !important;
+                border: 2px solid cyan !important;
+            `;
+            ftDebugDiv.textContent = `FT.COM DEBUG: hasInstitutionalAccess() called - FORCING BANNER`;
+            if (document.body) {
+                document.body.appendChild(ftDebugDiv);
+            }
+        } catch (e) {
+            console.error('Error creating ft.com debug div:', e);
+        }
+        
         return false; // Force banner to show
     }
     
@@ -1150,6 +1243,30 @@ async function checkAndShowBanner(url) {
         console.log('🔍 [checkAndShowBanner] DEBUGGING: ft.com detected!');
         console.log('🔍 [checkAndShowBanner] URL:', url);
         console.log('🔍 [checkAndShowBanner] Hostname:', hostname);
+        
+        // Add visual debug feedback for ft.com banner check
+        try {
+            const ftBannerDebugDiv = document.createElement('div');
+            ftBannerDebugDiv.style.cssText = `
+                position: fixed !important;
+                top: 100px !important;
+                right: 0 !important;
+                background: green !important;
+                color: white !important;
+                padding: 10px !important;
+                z-index: 2147483645 !important;
+                font-family: monospace !important;
+                font-size: 11px !important;
+                max-width: 250px !important;
+                border: 2px solid lime !important;
+            `;
+            ftBannerDebugDiv.textContent = `FT.COM DEBUG: checkAndShowBanner() running...`;
+            if (document.body) {
+                document.body.appendChild(ftBannerDebugDiv);
+            }
+        } catch (e) {
+            console.error('Error creating ft.com banner debug div:', e);
+        }
     }
     
     if (!url || typeof url !== 'string') {
