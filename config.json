@@ -16,11 +16,7 @@
     "version": "1.0",
     "accessIndicators": [
         "Access provided by",
-        "Site License Access Provided By",
-        "WWU",
-        "Western Washington University",
-        "wwu.edu",
-        "WESTERN WASHINGTON UNIV"
+        "Site License Access Provided By"
     ],
     "_comment_accessIndicators": "These strings are used to detect if a page indicates the user already has institutional access. They are case-insensitive. The extension will also automatically use institutionName, institutionDomain, institutionShortName, and institutionLibraryName.",
     

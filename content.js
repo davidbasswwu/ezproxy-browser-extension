@@ -145,6 +145,9 @@ async function getDomainList() {
 async function hasInstitutionalAccess(config) {
     debugLog('[hasInstitutionalAccess] Checking if user has institutional access');
     
+    // Reset the institutional access flag for this new check
+    institutionalAccessDetected = false;
+    
     // Set the check in progress flag to block other banner creation attempts
     institutionalAccessCheckInProgress = true;
     console.log('[EZProxy DEBUG] Setting institutionalAccessCheckInProgress = true');
@@ -169,8 +172,18 @@ async function hasInstitutionalAccess(config) {
     let pageText = '';
     
     try {
-        // Method 1: Direct textContent extraction
-        pageText = document.body?.textContent || document.documentElement?.textContent || '';
+        // Method 1: Direct textContent extraction, but exclude extension banners
+        let bodyElement = document.body || document.documentElement;
+        if (bodyElement) {
+            // Create a clone to avoid modifying the original DOM
+            const bodyClone = bodyElement.cloneNode(true);
+            
+            // Remove extension banner elements from the clone
+            const bannersToRemove = bodyClone.querySelectorAll(`#${BANNER_ID}, #${SECONDARY_BANNER_ID}`);
+            bannersToRemove.forEach(banner => banner.remove());
+            
+            pageText = bodyClone.textContent || '';
+        }
         
         // Method 2: If text is empty or very short, try getting text from main content areas
         if (!pageText || pageText.length < 100) {
@@ -184,7 +197,12 @@ async function hasInstitutionalAccess(config) {
                 const elements = document.querySelectorAll(selector);
                 if (elements && elements.length > 0) {
                     for (const element of elements) {
-                        pageText += ' ' + (element.textContent || '');
+                        // Create a clone and remove banner elements
+                        const elementClone = element.cloneNode(true);
+                        const bannersToRemove = elementClone.querySelectorAll(`#${BANNER_ID}, #${SECONDARY_BANNER_ID}`);
+                        bannersToRemove.forEach(banner => banner.remove());
+                        
+                        pageText += ' ' + (elementClone.textContent || '');
                     }
                 }
             }
@@ -196,6 +214,10 @@ async function hasInstitutionalAccess(config) {
             const paragraphs = document.querySelectorAll('p');
             if (paragraphs && paragraphs.length > 0) {
                 for (const p of paragraphs) {
+                    // Skip paragraphs that are inside banner elements
+                    if (p.closest(`#${BANNER_ID}, #${SECONDARY_BANNER_ID}`)) {
+                        continue;
+                    }
                     pageText += ' ' + (p.textContent || '');
                 }
             }
@@ -303,7 +325,8 @@ async function hasInstitutionalAccess(config) {
     
     // Check for access indicators in page text
     const foundIndicators = [];
-    accessIndicators.forEach(indicator => {
+    console.log(`[EZProxy DEBUG] About to check ${accessIndicators.length} indicators against page text`);
+    accessIndicators.forEach((indicator, index) => {
         if (!indicator) return;
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
@@ -320,6 +343,7 @@ async function hasInstitutionalAccess(config) {
             debugLog(`[hasInstitutionalAccess] CONTEXT: "...${context}..."`);
         }
     });
+    console.log(`[EZProxy DEBUG] Finished checking indicators. Found: ${foundIndicators.length}`);
     
     if (foundIndicators.length > 0) {
         console.warn('[hasInstitutionalAccess] ⚠️  INSTITUTIONAL ACCESS DETECTED - BANNER WILL NOT SHOW');
@@ -345,18 +369,16 @@ async function hasInstitutionalAccess(config) {
     }
     
     // Additional check for EZProxy elements in the page
+    // Only look for actual EZProxy links/forms, not just mentions in content
     const ezproxyElements = [
-        ...Array.from(document.querySelectorAll('a[href*="ezproxy" i]')),
-        ...Array.from(document.querySelectorAll('a[href*="proxy" i]')),
-        ...Array.from(document.querySelectorAll('*')).filter(el => {
-            const text = el.textContent?.toLowerCase() || '';
-            return text.includes('ezproxy') || 
-                   text.includes('proxy login') ||
-                   text.includes('institutional login');
-        })
+        ...Array.from(document.querySelectorAll('a[href*="ezproxy"]')),
+        ...Array.from(document.querySelectorAll('form[action*="ezproxy"]')),
+        ...Array.from(document.querySelectorAll('input[name*="proxy"], input[value*="proxy login"]'))
     ];
     
     if (ezproxyElements.length > 0) {
+        console.log(`[EZProxy DEBUG] Found ${ezproxyElements.length} EZProxy related elements on page`);
+        console.log('[EZProxy DEBUG] EZProxy elements found:', ezproxyElements.slice(0, 3).map(el => el.tagName + ': ' + (el.textContent?.substring(0, 100) || el.href?.substring(0, 100) || 'no content')));
         debugLog(`[hasInstitutionalAccess] Found ${ezproxyElements.length} EZProxy related elements`);
         return true;
     }
