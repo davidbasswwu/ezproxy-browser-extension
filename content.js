@@ -1,5 +1,7 @@
 // content.js
 
+// console.log('[EZProxy DEBUG] Content script loaded at:', new Date().toISOString());
+
 // Production logging helper - only logs in development mode
 function debugLog(message, data = null) {
     try {
@@ -18,6 +20,11 @@ function debugLog(message, data = null) {
 }
 
 // Initialize extension logging
+// console.log('[EZProxy DEBUG] Content script initialization:', {
+//     url: window.location.href,
+//     hostname: window.location.hostname,
+//     timestamp: new Date().toISOString()
+// });
 debugLog('Content script loaded', {
     url: window.location.href,
     hostname: window.location.hostname,
@@ -37,6 +44,12 @@ let isInitialized = false;
 
 // Global list of exception domains loaded from domain-list.json
 let EXCEPTION_DOMAINS = [];
+
+// Global flag to track if institutional access was detected for this page
+let institutionalAccessDetected = false;
+
+// Global flag to prevent any banner operations while checking institutional access
+let institutionalAccessCheckInProgress = false;
 
 // Check if user has reduced motion preference
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -132,8 +145,13 @@ async function getDomainList() {
 async function hasInstitutionalAccess(config) {
     debugLog('[hasInstitutionalAccess] Checking if user has institutional access');
     
+    // Set the check in progress flag to block other banner creation attempts
+    institutionalAccessCheckInProgress = true;
+    console.log('[EZProxy DEBUG] Setting institutionalAccessCheckInProgress = true');
+    
     if (!config) {
         console.warn('[hasInstitutionalAccess] No config provided');
+        institutionalAccessCheckInProgress = false;
         return false;
     }
     
@@ -269,10 +287,19 @@ async function hasInstitutionalAccess(config) {
     // Log what we're checking for
     debugLog('[hasInstitutionalAccess] Checking page for indicators:', accessIndicators);
     
+    // TEMPORARY DEBUG: Always log key info for debugging
+    console.log('[EZProxy DEBUG] Institution name:', instName);
+    console.log('[EZProxy DEBUG] Number of access indicators to check:', accessIndicators.length);
+    console.log('[EZProxy DEBUG] Sample indicators:', accessIndicators.slice(0, 5));
+    
     // Convert page text to lowercase once for case-insensitive search
     const normalizedPageText = pageText.toLowerCase();
     debugLog('[hasInstitutionalAccess] Page text sample (first 500 chars):', 
         normalizedPageText.substring(0, 500).replace(/\s+/g, ' ').trim() + '...');
+    
+    // TEMPORARY DEBUG: Always log page text sample
+    console.log('[EZProxy DEBUG] Page text length:', normalizedPageText.length);
+    console.log('[EZProxy DEBUG] Page text sample:', normalizedPageText.substring(0, 300).replace(/\s+/g, ' ').trim());
     
     // Check for access indicators in page text
     const foundIndicators = [];
@@ -281,6 +308,7 @@ async function hasInstitutionalAccess(config) {
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
             foundIndicators.push(indicator);
+            console.log(`[EZProxy DEBUG] FOUND INDICATOR: "${indicator}" in page text`);
             debugLog(`[hasInstitutionalAccess] FOUND INDICATOR: "${indicator}" in page text`);
             
             // Show context around the found indicator for debugging
@@ -288,6 +316,7 @@ async function hasInstitutionalAccess(config) {
             const contextStart = Math.max(0, indicatorIndex - 50);
             const contextEnd = Math.min(normalizedPageText.length, indicatorIndex + indicator.length + 50);
             const context = normalizedPageText.substring(contextStart, contextEnd);
+            console.log(`[EZProxy DEBUG] CONTEXT: "...${context}..."`);
             debugLog(`[hasInstitutionalAccess] CONTEXT: "...${context}..."`);
         }
     });
@@ -298,6 +327,20 @@ async function hasInstitutionalAccess(config) {
         debugLog('[hasInstitutionalAccess] Current URL:', window.location.href);
         debugLog('[hasInstitutionalAccess] Page title:', document.title);
         debugLog('[hasInstitutionalAccess] Full page text length:', normalizedPageText.length);
+        
+        // Set global flag to prevent any banner creation
+        institutionalAccessDetected = true;
+        institutionalAccessCheckInProgress = false;
+        console.log('[EZProxy DEBUG] Setting global institutionalAccessDetected = true');
+        
+        // Remove any existing banner that might already be on the page
+        const existingBanner = document.getElementById(BANNER_ID);
+        if (existingBanner) {
+            console.log('[EZProxy DEBUG] Removing existing banner because institutional access detected');
+            existingBanner.remove();
+            restorePageMargin();
+        }
+        
         return true;
     }
     
@@ -349,6 +392,7 @@ async function hasInstitutionalAccess(config) {
     debugLog('[hasInstitutionalAccess] ✅ NO institutional access indicators found - BANNER SHOULD SHOW');
     debugLog('[hasInstitutionalAccess] Current URL:', window.location.href);
     debugLog('[hasInstitutionalAccess] Page title:', document.title);
+    institutionalAccessCheckInProgress = false;
     return false;
 }
 
@@ -495,8 +539,37 @@ function restorePageMargin() {
 async function createBanner(message, ezproxyUrl, domain) {
     debugLog('createBanner() function started', { domain });
     
+    // FIRST: Check global flags
+    if (institutionalAccessDetected) {
+        console.log('[EZProxy DEBUG] createBanner: Global flag shows institutional access detected, aborting');
+        return;
+    }
+    
+    if (institutionalAccessCheckInProgress) {
+        console.log('[EZProxy DEBUG] createBanner: Institutional access check in progress, waiting...');
+        // Wait a bit and check again
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (institutionalAccessDetected) {
+            console.log('[EZProxy DEBUG] createBanner: Institutional access detected while waiting, aborting');
+            return;
+        }
+    }
+    
     // Get the current configuration
     const config = await getConfig();
+    
+    // SECOND: Check for institutional access before creating any banner
+    debugLog('Checking institutional access before creating banner');
+    try {
+        const hasAccess = await hasInstitutionalAccess(config);
+        if (hasAccess) {
+            debugLog('Institutional access detected, aborting banner creation');
+            return; // Exit early without creating banner
+        }
+    } catch (error) {
+        console.warn('Error checking institutional access in createBanner, proceeding with banner:', error);
+    }
+    
     const bannerConfig = config.banner || {};
     
     debugLog('createBanner: got config');
@@ -513,7 +586,7 @@ async function createBanner(message, ezproxyUrl, domain) {
     banner.setAttribute('role', 'banner');
     banner.setAttribute('aria-label', 'EZProxy access notification');
     
-    // Base styles
+    // Base styles - START HIDDEN to prevent flash
     const baseStyles = `
         position: fixed;
         top: 0;
@@ -531,6 +604,8 @@ async function createBanner(message, ezproxyUrl, domain) {
         box-shadow: ${bannerConfig.boxShadow || '0 2px 4px rgba(0,0,0,0.1)'};
         font-size: ${bannerConfig.fontSize || '14px'};
         line-height: ${bannerConfig.lineHeight || '1.5'};
+        opacity: 0;
+        visibility: hidden;
     `;
     
     // Add animation styles if motion is not reduced
@@ -762,8 +837,26 @@ async function createBanner(message, ezproxyUrl, domain) {
     banner.appendChild(messageDiv);
     banner.appendChild(buttonsDiv);
 
-    // Add banner to page
+    // Add banner to page (still hidden)
     document.body.insertBefore(banner, document.body.firstChild);
+
+    // FINAL CHECK: Verify no institutional access before showing banner
+    console.log('[EZProxy DEBUG] Final institutional access check before showing banner');
+    try {
+        const finalAccessCheck = await hasInstitutionalAccess(config);
+        if (finalAccessCheck) {
+            console.log('[EZProxy DEBUG] Final check: Institutional access detected, removing banner immediately');
+            banner.remove();
+            return;
+        }
+    } catch (error) {
+        console.warn('[EZProxy DEBUG] Error in final access check, proceeding with banner:', error);
+    }
+
+    // If we get here, no institutional access detected - show the banner
+    console.log('[EZProxy DEBUG] Final check passed, showing banner');
+    banner.style.opacity = '1';
+    banner.style.visibility = 'visible';
 
     // Animate in if motion is not reduced
     if (!prefersReducedMotion) {
@@ -1206,7 +1299,15 @@ async function init() {
  * @param {string} url - The URL to check
  */
 async function checkAndShowBanner(url) {
+    const callId = Math.random().toString(36).substr(2, 9);
+    console.log(`[EZProxy DEBUG] checkAndShowBanner called with URL: ${url} [CALL-${callId}]`);
     debugLog('Starting banner check', { url });
+    
+    // FIRST: Check global flag immediately
+    if (institutionalAccessDetected) {
+        console.log(`[EZProxy DEBUG] checkAndShowBanner: Global flag already set, exiting [CALL-${callId}]`);
+        return;
+    }
     
     if (!url || typeof url !== 'string') {
         debugLog('Invalid URL provided', { url });
@@ -1276,6 +1377,9 @@ async function checkAndShowBanner(url) {
         }
         
         // Step 4: Check domain against domain list
+        console.log('[EZProxy DEBUG] Checking domain against domain list');
+        console.log('[EZProxy DEBUG] Domain to match:', domain);
+        console.log('[EZProxy DEBUG] Domain list length:', domainList.length);
         debugLog('[checkAndShowBanner] Step 4: Checking domain against domain list...');
         debugLog('[checkAndShowBanner] Domain to match:', domain);
         debugLog('[checkAndShowBanner] Domain list length:', domainList.length);
@@ -1314,9 +1418,26 @@ async function checkAndShowBanner(url) {
         
         debugLog('[checkAndShowBanner] Matched domain in list:', matchedDomain);
         
+        // Step 5: Check for institutional access IMMEDIATELY after domain match
+        console.log(`[EZProxy DEBUG] About to check institutional access EARLY [CALL-${callId}]`);
+        try {
+            const config = await getConfig().catch(err => {
+                debugLog('Failed to load config for early institutional check', { error: err.message });
+                throw new Error('Failed to load extension configuration');
+            });
+            
+            const hasAccess = await hasInstitutionalAccess(config);
+            if (hasAccess) {
+                console.log(`[EZProxy DEBUG] checkAndShowBanner: EARLY INSTITUTIONAL ACCESS DETECTED - EXITING [CALL-${callId}]`);
+                return;
+            }
+        } catch (e) {
+            console.error('[checkAndShowBanner] Error in early institutional access check:', e);
+            // Continue with processing
+        }
 
         
-        // Step 5: Check if domain is dismissed
+        // Step 6: Check if domain is dismissed
         debugLog('[checkAndShowBanner] Step 5: Checking if domain is dismissed...');
         const isDismissed = await isDomainDismissed(matchedDomain).catch(err => {
             console.error('[checkAndShowBanner] Error checking if domain is dismissed:', err);
@@ -1347,6 +1468,7 @@ async function checkAndShowBanner(url) {
         }
         
         // Step 6: Check for institutional access
+        console.log('[EZProxy DEBUG] About to check institutional access');
         debugLog('[checkAndShowBanner] Step 6: Checking for institutional access...');
         try {
             const hasAccess = await hasInstitutionalAccess(config);
@@ -1354,10 +1476,12 @@ async function checkAndShowBanner(url) {
             debugLog('Institutional access check completed', { domain: matchedDomain, hasAccess });
             
             if (hasAccess) {
+                console.log(`[EZProxy DEBUG] checkAndShowBanner: INSTITUTIONAL ACCESS DETECTED - EXITING WITHOUT BANNER [CALL-${callId}]`);
                 debugLog('[checkAndShowBanner] User has institutional access, skipping EZProxy notification');
                 
                 debugLog('User has institutional access, skipping banner', { domain: matchedDomain });
                 
+                console.log(`[EZProxy DEBUG] checkAndShowBanner: ABOUT TO RETURN - BANNER SHOULD NOT BE CREATED [CALL-${callId}]`);
                 return;
             }
             debugLog('[checkAndShowBanner] No institutional access detected, proceeding with banner check');
@@ -1396,6 +1520,7 @@ async function checkAndShowBanner(url) {
 
         
         try {
+            console.log(`[EZProxy DEBUG] checkAndShowBanner: CREATING BANNER - this should NOT happen if institutional access detected [CALL-${callId}]`);
             await createBanner(
                 bannerMessage,
                 ezproxyUrl,
@@ -1475,6 +1600,7 @@ if (document.readyState === 'loading') {
 // Enhanced message listener with auto-redirect support
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'DOMAIN_MATCH') {
+        console.log('[EZProxy DEBUG] Received DOMAIN_MATCH message for:', message.domain);
         debugLog('[onMessage] Received DOMAIN_MATCH message for:', message.domain);
         
         // Process the message asynchronously but respond immediately
@@ -1499,12 +1625,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
             .then(async config => {
                 // Then check for institutional access
+                console.log('[EZProxy DEBUG] Message listener checking institutional access');
                 try {
                     const hasAccess = await hasInstitutionalAccess(config);
                     if (hasAccess) {
+                        console.log('[EZProxy DEBUG] Message listener: User has institutional access, skipping EZProxy notification');
                         debugLog('[onMessage] User has institutional access, skipping EZProxy notification');
                         throw new Error('HAS_INSTITUTIONAL_ACCESS');
                     }
+                    console.log('[EZProxy DEBUG] Message listener: No institutional access detected, proceeding with banner');
                     return config;
                 } catch (err) {
                     if (err.message === 'HAS_INSTITUTIONAL_ACCESS') {

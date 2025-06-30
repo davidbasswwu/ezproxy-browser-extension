@@ -7,7 +7,7 @@ const ESLintPlugin = require('eslint-webpack-plugin');
 
 module.exports = (env, argv) => ({
   mode: argv.mode === 'production' ? 'production' : 'development',
-  devtool: argv.mode === 'production' ? 'source-map' : 'cheap-module-source-map',
+  devtool: false,
   entry: {
     background: './background.js',
     content: './content.js',
@@ -36,20 +36,7 @@ module.exports = (env, argv) => ({
     ],
   },
   optimization: {
-    minimize: true,
-    minimizer: [
-      new TerserPlugin({
-        terserOptions: {
-          compress: {
-            drop_console: argv.mode === 'production',
-          },
-          format: {
-            comments: false,
-          },
-        },
-        extractComments: false,
-      }),
-    ],
+    minimize: false,
   },
   plugins: [
     new CleanWebpackPlugin(),
