@@ -138,7 +138,7 @@ async function hasInstitutionalAccess(config) {
     }
     
     // Get current domain to check for special cases
-    const currentHostname = window.location.hostname.toLowerCase();
+    // const currentHostname = window.location.hostname.toLowerCase();
     
     // // IMPORTANT: For Nature and Chronicle, we'll return false to ensure the banner shows
     // // This is a temporary fix to ensure consistent banner display
@@ -242,6 +242,29 @@ async function hasInstitutionalAccess(config) {
     if (Array.isArray(config.fullAccessIndicators)) {
         accessIndicators.push(...config.fullAccessIndicators.map(i => i.toLowerCase()));
     }
+    
+    // Add institution-specific combinations for better detection
+    const institutionNames = [
+        instName.toLowerCase(),
+        (config.institutionDomain || '').toLowerCase(),
+        (config.institutionShortName || '').toLowerCase(),
+        (config.institutionLibraryName || '').toLowerCase()
+    ].filter(name => name && name.length > 0);
+    
+    // Add combined phrases that indicate institutional access
+    const accessPhrases = [
+        'access provided by',
+        'site license access provided by',
+        'licensed to',
+        'access through'
+    ];
+    
+    // Create combinations of access phrases with institution names
+    accessPhrases.forEach(phrase => {
+        institutionNames.forEach(name => {
+            accessIndicators.push(`${phrase} ${name}`);
+        });
+    });
     
     // Log what we're checking for
     debugLog('[hasInstitutionalAccess] Checking page for indicators:', accessIndicators);
@@ -807,11 +830,18 @@ function checkEZProxyExceptionURL(config) {
         return null;
     }
     
-    // Sanitize ezproxyBaseUrl before using in RegExp
-    const safeEzproxyBaseUrl = String(config.ezproxyBaseUrl).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Use static RegExp pattern to avoid security issues
-    const ezproxyPattern = new RegExp('^([^.]+)\\.' + safeEzproxyBaseUrl);
-    const match = currentHostname.match(ezproxyPattern);
+    // Use string methods instead of RegExp for security
+    const ezproxyBaseUrl = config.ezproxyBaseUrl;
+    const ezproxyDotPrefix = '.' + ezproxyBaseUrl;
+    
+    // Check if hostname ends with the ezproxy domain and get the subdomain part
+    if (!currentHostname.endsWith(ezproxyDotPrefix)) {
+        return null;
+    }
+    
+    // Extract the subdomain part (everything before .ezproxy.domain)
+    const transformedDomain = currentHostname.substring(0, currentHostname.length - ezproxyDotPrefix.length);
+    const match = transformedDomain ? [currentHostname, transformedDomain] : null;
     
     if (!match) {
         return null;
@@ -819,8 +849,8 @@ function checkEZProxyExceptionURL(config) {
     
     // Convert the transformed domain back to original format
     // www-example-com -> www.example.com
-    const transformedDomain = match[1];
-    const originalDomain = transformedDomain.replace(/-/g, '.');
+    const extractedDomain = match[1];
+    const originalDomain = extractedDomain.replace(/-/g, '.');
     
     // Check if this original domain is in our exception list
     if (Array.isArray(EXCEPTION_DOMAINS)) {
