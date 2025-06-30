@@ -1,6 +1,7 @@
 As of 31 May 2025:
 
 ### Todo
+- [ ] Remove some of the Console logs (once more testing has been done)
 - [ ] Add a "Automatic Redirect" option that always redirects to EZproxy without the user having to click the button
 - [ ] Submit the extension to the Chrome Web Store 
 
