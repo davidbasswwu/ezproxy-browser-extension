@@ -1757,15 +1757,25 @@ class EZProxyDomainSidebar {
 
     async loadCategories() {
         try {
-            const url = chrome.runtime.getURL('domain-categories.json');
-            const response = await fetch(url);
-            const data = await response.json();
-            this.categories = data.categories;
-            this.filteredCategories = { ...this.categories };
+            // Request categories from background script (which handles caching and updates)
+            const response = await chrome.runtime.sendMessage({ type: 'GET_CATEGORIES' });
+            if (response && response.categories) {
+                this.categories = response.categories;
+                this.filteredCategories = { ...this.categories };
+                debugLog('[Sidebar] Categories loaded from background script');
+                return;
+            }
+            
+            if (response && response.error) {
+                throw new Error(response.error);
+            }
+            
+            throw new Error('No categories received from background script');
         } catch (error) {
             console.error('[Sidebar] Failed to load categories:', error);
             this.categories = this.createBasicCategories();
             this.filteredCategories = { ...this.categories };
+            debugLog('[Sidebar] Using basic fallback categories');
         }
     }
 

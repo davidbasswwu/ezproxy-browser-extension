@@ -1,5 +1,7 @@
 {
     "domainListUrl": "https://libweb.library.wwu.edu/ezproxy/domain-list.json",
+    "domainCategoriesUrl": "https://libweb.library.wwu.edu/ezproxy/domain-categories.json",
+    "_comment_domainCategoriesUrl": "URL to fetch updated domain categories. If not available, falls back to local domain-categories.json",
     "ezproxyBaseUrl": "ezproxy.library.wwu.edu",
     "institutionName": "Western Washington University",
     "institutionDomain": "wwu.edu",

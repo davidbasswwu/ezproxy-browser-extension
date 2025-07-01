@@ -237,6 +237,86 @@ async function updateDomainList() {
     }
 }
 
+async function updateDomainCategories() {
+    try {
+        // Try to load from storage first
+        const stored = await chrome.storage.local.get(['domainCategories', 'categoriesLastUpdate']);
+        if (stored.domainCategories && typeof stored.domainCategories === 'object') {
+            debugLog('Domain categories loaded from storage');
+            
+            // Check if we need to update based on interval
+            const now = Date.now();
+            const lastUpdate = stored.categoriesLastUpdate || 0;
+            const timeSinceUpdate = now - lastUpdate;
+            
+            if (timeSinceUpdate < CONFIG.updateInterval) {
+                debugLog(`Domain categories are up to date (last updated ${Math.round(timeSinceUpdate / 1000 / 60)} minutes ago)`);
+                return;
+            }
+        }
+
+        // If we get here, we need to fetch fresh categories
+        if (!CONFIG.domainCategoriesUrl) {
+            debugLog('No domain categories URL configured, skipping remote update');
+            return;
+        }
+
+        debugLog('Fetching remote domain categories from:', CONFIG.domainCategoriesUrl);
+        const response = await fetchWithRetry(CONFIG.domainCategoriesUrl, CONFIG.retryAttempts, CONFIG.retryDelay);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const categories = await response.json();
+        
+        // Validate categories structure
+        if (!categories || typeof categories !== 'object') {
+            throw new Error('Remote domain categories is not a valid object');
+        }
+
+        if (!categories.categories || typeof categories.categories !== 'object') {
+            throw new Error('Remote domain categories missing "categories" property');
+        }
+        
+        // Store in local storage for offline access
+        await chrome.storage.local.set({ 
+            domainCategories: categories,
+            categoriesLastUpdate: Date.now()
+        });
+        
+        debugLog('Domain categories updated successfully');
+        return true;
+    } catch (error) {
+        console.error('Error updating domain categories:', error);
+        
+        // If we don't have categories yet, try to load the local fallback
+        const stored = await chrome.storage.local.get(['domainCategories']);
+        if (!stored.domainCategories) {
+            debugLog('Attempting to load local domain categories as fallback...');
+            try {
+                const localCategoriesUrl = chrome.runtime.getURL('domain-categories.json');
+                const response = await fetch(localCategoriesUrl);
+                const localCategories = await response.json();
+                
+                // Store the local version so it's cached
+                await chrome.storage.local.set({ 
+                    domainCategories: localCategories,
+                    categoriesLastUpdate: Date.now()
+                });
+                
+                debugLog('Loaded domain categories from local fallback');
+                return true;
+            } catch (localError) {
+                console.error('Error loading local domain categories:', localError);
+            }
+        }
+        
+        debugLog('Using existing domain categories from storage');
+        return false;
+    }
+}
+
 function transformDomainForEzproxy(domain) {
     // Use cache to improve performance
     if (urlTransformCache.has(domain)) {
@@ -397,6 +477,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Required for async response
     }
     
+    // Handle GET_CATEGORIES action
+    if (request.type === 'GET_CATEGORIES') {
+        chrome.storage.local.get(['domainCategories'], (result) => {
+            if (result.domainCategories && result.domainCategories.categories) {
+                sendResponse({ categories: result.domainCategories.categories });
+            } else {
+                // Fallback to local file
+                const localUrl = chrome.runtime.getURL('domain-categories.json');
+                fetch(localUrl)
+                    .then(response => response.json())
+                    .then(data => {
+                        sendResponse({ categories: data.categories });
+                    })
+                    .catch(error => {
+                        console.error('Error loading local categories:', error);
+                        sendResponse({ error: 'Failed to load categories' });
+                    });
+            }
+        });
+        return true; // Required for async response
+    }
+    
     // Log unhandled messages for debugging
     console.warn('Unhandled message in background script:', request);
     return false;
@@ -526,9 +628,13 @@ async function initialize() {
         // Load domain list
         await updateDomainList();
         
+        // Load domain categories
+        await updateDomainCategories();
+        
         // Schedule periodic updates
         setInterval(updateDomainList, CONFIG.updateInterval);
-        console.log(`Scheduled domain list updates every ${CONFIG.updateInterval / 1000 / 60} minutes`);
+        setInterval(updateDomainCategories, CONFIG.updateInterval);
+        console.log(`Scheduled domain list and categories updates every ${CONFIG.updateInterval / 1000 / 60} minutes`);
         
         console.log('EZProxy extension initialized successfully');
         
