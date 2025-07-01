@@ -12,7 +12,6 @@ module.exports = (env, argv) => ({
     background: './background.js',
     content: './content.js',
     popup: './popup.js',
-    sidebar: './sidebar.js',
   },
   output: {
     filename: '[name].js',
