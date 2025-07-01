@@ -1,0 +1,172 @@
+{
+  "categories": {
+    "Science & Technology": {
+      "description": "Scientific journals, technology platforms, and research databases",
+      "domains": [
+        "aaas.org",
+        "accessscience.com",
+        "asbmb.org",
+        "asm.org",
+        "biologists.com",
+        "ccdc.cam.ac.uk",
+        "cdnsciencepub.com",
+        "chemistryworld.com",
+        "direct.mit.edu",
+        "embopress.org",
+        "genetics.org",
+        "geoscienceworld.org",
+        "highwirepress.com",
+        "ieeexplore.ieee.org",
+        "iopscience.iop.org",
+        "nature.com",
+        "pnas.org",
+        "rsc.org",
+        "science.org",
+        "sciencedirect.com",
+        "spiedigitallibrary.org",
+        "webofscience.com"
+      ]
+    },
+    "Medical & Health": {
+      "description": "Medical journals, health databases, and healthcare resources",
+      "domains": [
+        "aaiddjournals.org",
+        "ajph.aphapublications.org",
+        "ajslp.pubs.asha.org",
+        "healthpromotionjournal.com",
+        "informahealthcare.com",
+        "jospt.org",
+        "karger.com",
+        "thieme-connect.com",
+        "www1.aota.org"
+      ]
+    },
+    "Academic Publishing": {
+      "description": "University presses, academic publishers, and scholarly databases",
+      "domains": [
+        "academic.oup.com",
+        "annualreviews.org",
+        "bepress.com",
+        "brill.com",
+        "cambridge.org",
+        "degruyter.com",
+        "emeraldinsight.com",
+        "euppublishing.com",
+        "fulcrum.org",
+        "igi-global.com",
+        "ingentaconnect.com",
+        "jbe-platform.com",
+        "journals.sagepub.com",
+        "journals.uchicago.edu",
+        "springer.com",
+        "tandfonline.com",
+        "taylorfrancis.com",
+        "universitypressscholarship.com",
+        "utexaspressjournals.org",
+        "utpress.utoronto.ca"
+      ]
+    },
+    "Research Databases": {
+      "description": "Academic search engines, citation databases, and research tools",
+      "domains": [
+        "dl.acm.org",
+        "ebookcentral.proquest.com",
+        "grantforward.com",
+        "incites.thomsonreuters.com",
+        "jstor.org",
+        "proquest.com",
+        "ulrichsweb.serialssolutions.com",
+        "worldcat.org"
+      ]
+    },
+    "Multimedia & Video": {
+      "description": "Video databases, streaming platforms, and multimedia resources",
+      "domains": [
+        "alexanderstreet.com",
+        "beta.ambrosevideo.com",
+        "digitalcampus.swankmp.net",
+        "digitalconcerthall.com",
+        "docuseek2.com",
+        "edu.medici.tv",
+        "filmplatform.net",
+        "fod.infobase.com",
+        "gvsu.tugg.com",
+        "video.alexanderstreet.com",
+        "wwu.kanopy.com",
+        "wwu.kanopystreaming.com",
+        "wwu.naxosmusiclibrary.com"
+      ]
+    },
+    "Business & Economics": {
+      "description": "Business databases, financial information, and economic resources",
+      "domains": [
+        "checkpoint.riag.com",
+        "corporateaffiliations.com",
+        "cpreg.thomsonreuters.com",
+        "dataplanet.sagepub.com",
+        "europaworld.com",
+        "fconline.foundationcenter.org",
+        "ft.com",
+        "ibisworld.com",
+        "insights.mrisimmons.com",
+        "intelliconnect.cch.com",
+        "sloanreview.mit.edu",
+        "taxandaccounting.bna.com"
+      ]
+    },
+    "Humanities & Literature": {
+      "description": "Literature, history, philosophy, and cultural studies resources",
+      "domains": [
+        "anb.org",
+        "blakequarterly.org",
+        "bloomsburycollections.com",
+        "brepolsonline.net",
+        "carlyleletters.dukeupress.edu",
+        "chicagomanualofstyle.org",
+        "eebo.chadwyck.com",
+        "fortunoff.aviaryplatform.com",
+        "hapi.ucla.edu",
+        "heinonline.org",
+        "humanitiesebook.org",
+        "wellesley.chadwyck.co.uk"
+      ]
+    },
+    "News & Current Affairs": {
+      "description": "Newspapers, magazines, and current events databases",
+      "domains": [
+        "chronicle.com",
+        "exacteditions.com",
+        "infoweb.newsbank.com"
+      ]
+    },
+    "Other Resources": {
+      "description": "Specialized databases and miscellaneous academic resources",
+      "domains": [
+        "aanda.org",
+        "ajsonline.org",
+        "aspresolver.com",
+        "atm.org.uk",
+        "birdsna.org",
+        "cgscholar.com",
+        "chimeracloud.org",
+        "choicereviews.org",
+        "cios.org",
+        "clcd.com",
+        "crossref.org",
+        "eas.pennpress.org",
+        "enterprise.clcd.com",
+        "equinoxpub.com",
+        "fisonline.com",
+        "fq.math.ca",
+        "int-res.com",
+        "ipasource.com",
+        "jjs-online.net",
+        "jollas.org",
+        "journals.ala.org",
+        "journals.humankinetics.com"
+      ]
+    }
+  },
+  "version": "1.0",
+  "lastUpdated": "2025-06-30"
+}

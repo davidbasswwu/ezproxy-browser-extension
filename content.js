@@ -1710,3 +1710,389 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 });
+
+// =====================================
+// DOMAIN NAVIGATION SIDEBAR FEATURE
+// =====================================
+
+class EZProxyDomainSidebar {
+    constructor() {
+        this.isOpen = false;
+        this.categories = null;
+        this.domains = null;
+        this.filteredCategories = null;
+        this.config = null;
+        
+        // Only initialize sidebar on main frames to avoid conflicts
+        if (window.self === window.top) {
+            this.init();
+        }
+    }
+
+    async init() {
+        debugLog('[Sidebar] Initializing domain sidebar');
+        
+        try {
+            // Small delay to ensure page is ready
+            setTimeout(async () => {
+                await this.loadConfig();
+                await this.loadCategories();
+                await this.loadDomains();
+                this.createSidebar();
+                this.bindEvents();
+                debugLog('[Sidebar] Sidebar initialization completed');
+            }, 1000);
+        } catch (error) {
+            console.error('[Sidebar] Failed to initialize sidebar:', error);
+        }
+    }
+
+    async loadConfig() {
+        try {
+            this.config = await getConfig();
+        } catch (error) {
+            console.warn('[Sidebar] Failed to load config:', error);
+        }
+    }
+
+    async loadCategories() {
+        try {
+            const url = chrome.runtime.getURL('domain-categories.json');
+            const response = await fetch(url);
+            const data = await response.json();
+            this.categories = data.categories;
+            this.filteredCategories = { ...this.categories };
+        } catch (error) {
+            console.error('[Sidebar] Failed to load categories:', error);
+            this.categories = this.createBasicCategories();
+            this.filteredCategories = { ...this.categories };
+        }
+    }
+
+    async loadDomains() {
+        try {
+            const domainList = await getDomainList();
+            this.domains = domainList || [];
+        } catch (error) {
+            console.error('[Sidebar] Failed to load domains:', error);
+            this.domains = [];
+        }
+    }
+
+    createBasicCategories() {
+        return {
+            'All Resources': {
+                description: 'Complete list of available resources',
+                domains: this.domains || []
+            }
+        };
+    }
+
+    createSidebar() {
+        // Check if sidebar already exists
+        if (document.getElementById('ezproxy-domain-sidebar')) {
+            return;
+        }
+
+        // Create toggle button
+        const toggleButton = document.createElement('button');
+        toggleButton.id = 'ezproxy-sidebar-toggle';
+        toggleButton.title = 'Open EZProxy Domain Navigator';
+        toggleButton.innerHTML = '📚';
+        toggleButton.style.cssText = `
+            position: fixed !important;
+            top: 50% !important;
+            right: 20px !important;
+            transform: translateY(-50%) !important;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            border: none !important;
+            color: white !important;
+            width: 50px !important;
+            height: 50px !important;
+            border-radius: 50% !important;
+            cursor: pointer !important;
+            font-size: 18px !important;
+            z-index: 2147483646 !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+            transition: all 0.3s ease !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        `;
+
+        // Create sidebar container
+        const sidebar = document.createElement('div');
+        sidebar.id = 'ezproxy-domain-sidebar';
+        // Responsive width based on screen size
+        const isMobile = window.innerWidth <= 768;
+        const sidebarWidth = isMobile ? '100vw' : '500px';
+        const sidebarHiddenPosition = isMobile ? '-100vw' : '-500px';
+
+        sidebar.style.cssText = `
+            position: fixed !important;
+            top: 0 !important;
+            right: ${sidebarHiddenPosition} !important;
+            width: ${sidebarWidth} !important;
+            height: 100vh !important;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3) !important;
+            z-index: 2147483647 !important;
+            transition: right 0.3s ease-in-out !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            color: white !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+        `;
+
+        // Create sidebar content
+        sidebar.innerHTML = `
+            <div style="padding: 20px; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
+                <button id="sidebar-close-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(255, 255, 255, 0.2); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">×</button>
+                <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 10px 0; color: white;">EZProxy Navigator</h2>
+                <p style="font-size: 14px; opacity: 0.8; margin: 0; color: white;">Browse available academic resources</p>
+            </div>
+
+            <div style="padding: 15px 20px; background: rgba(0, 0, 0, 0.1);">
+                <input type="text" id="domain-search" placeholder="Search domains..." style="width: 100%; padding: 10px 12px; border: none; border-radius: 6px; background: rgba(255, 255, 255, 0.9); color: #333; font-size: 14px; box-sizing: border-box;">
+            </div>
+
+            <div id="categories-container" style="flex: 1; overflow-y: auto; padding: 20px;">
+                <!-- Categories will be populated here -->
+            </div>
+        `;
+
+        // Add to page
+        document.body.appendChild(toggleButton);
+        document.body.appendChild(sidebar);
+
+        // Populate categories
+        this.populateCategories();
+    }
+
+    populateCategories() {
+        const container = document.getElementById('categories-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        Object.entries(this.filteredCategories).forEach(([categoryName, categoryData]) => {
+            const categoryDiv = this.createCategoryElement(categoryName, categoryData);
+            container.appendChild(categoryDiv);
+        });
+    }
+
+    createCategoryElement(name, data) {
+        const categoryDiv = document.createElement('div');
+        categoryDiv.className = 'category';
+        categoryDiv.style.cssText = `
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        `;
+
+        const domainCount = data.domains ? data.domains.length : 0;
+        
+        categoryDiv.innerHTML = `
+            <div class="category-header" style="padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.1);">
+                <div>
+                    <div style="font-weight: 500; font-size: 14px; color: white;">${name}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="background: rgba(255, 255, 255, 0.2); padding: 2px 8px; border-radius: 12px; font-size: 12px; color: white;">${domainCount}</span>
+                    <span class="category-toggle" style="font-size: 12px; color: white;">▶</span>
+                </div>
+            </div>
+            <div class="domain-list" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease; overflow-y: auto;">
+                ${this.createDomainList(data.domains || [])}
+            </div>
+        `;
+
+        return categoryDiv;
+    }
+
+    createDomainList(domains) {
+        return domains.map(domain => {
+            const isCurrentDomain = window.location.hostname === domain;
+            const statusText = isCurrentDomain ? 'Currently viewing' : 'Available via EZProxy';
+            
+            return `
+                <div class="domain-item" data-domain="${domain}" style="padding: 12px 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; font-size: 13px; color: white; transition: background 0.2s ease;">
+                    <div style="font-weight: 500; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.4;">${domain}</div>
+                    <div style="font-size: 11px; opacity: 0.7; margin-top: 4px; line-height: 1.2;">${statusText}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    bindEvents() {
+        // Toggle button
+        const toggleButton = document.getElementById('ezproxy-sidebar-toggle');
+        if (toggleButton) {
+            toggleButton.addEventListener('click', () => this.toggleSidebar());
+        }
+
+        // Close button
+        const closeButton = document.getElementById('sidebar-close-btn');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => this.closeSidebar());
+        }
+
+        // Search functionality
+        const searchInput = document.getElementById('domain-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+        }
+
+        // Category toggle
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.category-header')) {
+                this.toggleCategory(e.target.closest('.category'));
+            }
+        });
+
+        // Domain click and hover effects
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.domain-item')) {
+                const domain = e.target.closest('.domain-item').dataset.domain;
+                this.handleDomainClick(domain);
+            }
+        });
+
+        // Add hover effects for domain items
+        document.addEventListener('mouseover', (e) => {
+            if (e.target.closest('.domain-item')) {
+                e.target.closest('.domain-item').style.background = 'rgba(255, 255, 255, 0.15)';
+            }
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            if (e.target.closest('.domain-item')) {
+                e.target.closest('.domain-item').style.background = 'transparent';
+            }
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            const sidebar = document.getElementById('ezproxy-domain-sidebar');
+            const toggleButton = document.getElementById('ezproxy-sidebar-toggle');
+            
+            if (this.isOpen && sidebar && !sidebar.contains(e.target) && e.target !== toggleButton) {
+                this.closeSidebar();
+            }
+        });
+
+        // ESC key to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isOpen) {
+                this.closeSidebar();
+            }
+        });
+    }
+
+    toggleSidebar() {
+        if (this.isOpen) {
+            this.closeSidebar();
+        } else {
+            this.openSidebar();
+        }
+    }
+
+    openSidebar() {
+        const sidebar = document.getElementById('ezproxy-domain-sidebar');
+        if (sidebar) {
+            sidebar.style.right = '0';
+            this.isOpen = true;
+            debugLog('[Sidebar] Sidebar opened');
+        }
+    }
+
+    closeSidebar() {
+        const sidebar = document.getElementById('ezproxy-domain-sidebar');
+        if (sidebar) {
+            const isMobile = window.innerWidth <= 768;
+            const hiddenPosition = isMobile ? '-100vw' : '-500px';
+            sidebar.style.right = hiddenPosition;
+            this.isOpen = false;
+            debugLog('[Sidebar] Sidebar closed');
+        }
+    }
+
+    toggleCategory(categoryElement) {
+        if (!categoryElement) return;
+
+        const isExpanded = categoryElement.classList.contains('expanded');
+        const domainList = categoryElement.querySelector('.domain-list');
+        const toggle = categoryElement.querySelector('.category-toggle');
+
+        if (isExpanded) {
+            categoryElement.classList.remove('expanded');
+            domainList.style.maxHeight = '0';
+            toggle.textContent = '▶';
+        } else {
+            categoryElement.classList.add('expanded');
+            domainList.style.maxHeight = '600px';
+            toggle.textContent = '▼';
+        }
+    }
+
+    handleSearch(query) {
+        if (!query.trim()) {
+            this.filteredCategories = { ...this.categories };
+        } else {
+            this.filteredCategories = {};
+            const lowerQuery = query.toLowerCase();
+
+            Object.entries(this.categories).forEach(([categoryName, categoryData]) => {
+                const filteredDomains = categoryData.domains.filter(domain =>
+                    domain.toLowerCase().includes(lowerQuery)
+                );
+
+                if (filteredDomains.length > 0) {
+                    this.filteredCategories[categoryName] = {
+                        ...categoryData,
+                        domains: filteredDomains
+                    };
+                }
+            });
+        }
+
+        this.populateCategories();
+    }
+
+    async handleDomainClick(domain) {
+        if (!domain) return;
+
+        debugLog('[Sidebar] Domain clicked:', domain);
+
+        try {
+            // Generate EZProxy URL
+            const ezproxyUrl = this.generateEZProxyUrl(domain);
+            
+            // Open in new tab
+            window.open(ezproxyUrl, '_blank');
+            
+            // Close sidebar
+            this.closeSidebar();
+            
+        } catch (error) {
+            console.error('[Sidebar] Error handling domain click:', error);
+        }
+    }
+
+    generateEZProxyUrl(domain) {
+        if (!this.config) {
+            // Fallback URL generation
+            return `https://ezproxy.library.wwu.edu/login?url=https://${domain}`;
+        }
+
+        const baseUrl = this.config.ezproxyBaseUrl;
+        return `https://${baseUrl}/login?url=https://${domain}`;
+    }
+}
+
+// Initialize sidebar after everything else is loaded
+setTimeout(() => {
+    if (window.self === window.top) {
+        new EZProxyDomainSidebar();
+    }
+}, 2000);

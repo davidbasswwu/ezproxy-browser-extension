@@ -12,6 +12,7 @@ module.exports = (env, argv) => ({
     background: './background.js',
     content: './content.js',
     popup: './popup.js',
+    sidebar: './sidebar.js',
   },
   output: {
     filename: '[name].js',
@@ -48,6 +49,7 @@ module.exports = (env, argv) => ({
         { from: 'images', to: 'images' },
         { from: 'config.json', to: '.', noErrorOnMissing: true },
         { from: 'domain-list.json', to: '.', noErrorOnMissing: true },
+        { from: 'domain-categories.json', to: '.', noErrorOnMissing: true },
         { from: 'utils', to: 'utils', noErrorOnMissing: true },
       ],
     }),

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>EZProxy Domain Navigator</title>
+    <style>
+        /* Sidebar Styles */
+        #ezproxy-domain-sidebar {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+            z-index: 2147483647;
+            transition: right 0.3s ease-in-out;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: white;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #ezproxy-domain-sidebar.active {
+            right: 0;
+        }
+
+        /* Sidebar Header */
+        .sidebar-header {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 10px 0;
+        }
+
+        .sidebar-subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+            margin: 0;
+        }
+
+        /* Search Box */
+        .search-container {
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px 12px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .search-box::placeholder {
+            color: #666;
+        }
+
+        /* Categories Container */
+        .categories-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        /* Category Styles */
+        .category {
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .category-header {
+            padding: 12px 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.1);
+            transition: background 0.2s ease;
+        }
+
+        .category-header:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .category-title {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .category-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .category-toggle {
+            font-size: 12px;
+            transition: transform 0.2s ease;
+        }
+
+        .category.expanded .category-toggle {
+            transform: rotate(90deg);
+        }
+
+        /* Domain List */
+        .domain-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .category.expanded .domain-list {
+            max-height: 400px;
+        }
+
+        .domain-item {
+            padding: 8px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 13px;
+        }
+
+        .domain-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .domain-item:last-child {
+            border-bottom: none;
+        }
+
+        .domain-name {
+            font-weight: 500;
+        }
+
+        .domain-status {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+
+        /* Close Button */
+        .close-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s ease;
+        }
+
+        .close-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Toggle Button */
+        #ezproxy-sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            z-index: 2147483646;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        #ezproxy-sidebar-toggle:hover {
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Hidden state */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            #ezproxy-domain-sidebar {
+                width: 100vw;
+                right: -100vw;
+            }
+            
+            #ezproxy-sidebar-toggle {
+                right: 15px;
+                width: 45px;
+                height: 45px;
+                font-size: 16px;
+            }
+        }
+
+        /* Scrollbar Styling */
+        .categories-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .categories-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .categories-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .categories-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Toggle Button -->
+    <button id="ezproxy-sidebar-toggle" title="Open EZProxy Domain Navigator">
+        📚
+    </button>
+
+    <!-- Domain Navigation Sidebar -->
+    <div id="ezproxy-domain-sidebar">
+        <div class="sidebar-header">
+            <button class="close-button" id="sidebar-close-btn">×</button>
+            <h2 class="sidebar-title">EZProxy Navigator</h2>
+            <p class="sidebar-subtitle">Browse available academic resources</p>
+        </div>
+
+        <div class="search-container">
+            <input type="text" class="search-box" id="domain-search" placeholder="Search domains...">
+        </div>
+
+        <div class="categories-container" id="categories-container">
+            <!-- Categories will be populated by JavaScript -->
+        </div>
+    </div>
+</body>
+</html>
