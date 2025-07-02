@@ -32,8 +32,8 @@ const CONFIG = {
   },
   session: {
     cookiesFile: path.join(process.cwd(), 'ezproxy-session.json'),
-    loginDetectionTimeout: 10000, // Wait 10 seconds for page to load before checking for login
-    navigationTimeout: 60000 // 60 seconds for page navigation
+    loginDetectionTimeout: 15000, // Wait 15 seconds for page to load before checking for login
+    navigationTimeout: 120000 // 2 minutes for page navigation (generous for slow connections)
   }
 };
 
@@ -166,27 +166,33 @@ class DomainVerifier {
   async promptForLogin() {
     console.log('\n👤 MANUAL LOGIN REQUIRED');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('A browser window has been opened for you to login.');
+    console.log('A browser window is open for you to login.');
     console.log('');
-    console.log('📋 Please complete the following steps:');
+    console.log('📋 Please complete ALL steps at your own pace:');
     console.log('');
-    console.log('1. 🌐 Look at the browser window showing the login page');
+    console.log('1. 🔍 Find the browser window (check your taskbar if needed)');
     console.log('2. 🔑 Enter your Western Washington University credentials');
     console.log('3. ✅ Complete any required authentication steps (2FA, etc.)');
-    console.log('4. ⏳ Wait until you are fully logged in and see the actual content');
-    console.log('5. ⌨️  Return to this terminal and press ENTER to continue');
+    console.log('4. ⏳ Navigate through any additional pages or prompts');
+    console.log('5. 🎯 Wait until you see actual academic content (not login pages)');
+    console.log('6. ⌨️  Return to this terminal and press ENTER when completely done');
     console.log('');
-    console.log('⏰ Take your time - there is no rush!');
-    console.log('💡 The authenticated session will be saved and reused for all domains');
-    console.log('🔄 On subsequent runs, no login will be required');
+    console.log('⏰ TAKE AS MUCH TIME AS YOU NEED - NO RUSH WHATSOEVER!');
+    console.log('🕒 This could take 5 minutes, 10 minutes, or however long you need');
+    console.log('💡 The authenticated session will be saved for all future runs');
+    console.log('🔄 After this one-time setup, no login will ever be required again');
     console.log('');
-    console.log('❓ Troubleshooting:');
-    console.log('   • If browser window is hidden, look for it in your taskbar');
-    console.log('   • If login fails, close browser and restart the script');
-    console.log('   • To reset session: rm ezproxy-session.json');
+    console.log('❓ Need help?');
+    console.log('   • Browser window missing? Check taskbar or restart script');
+    console.log('   • Login not working? Close browser and restart script');  
+    console.log('   • Want to start over? Run: rm ezproxy-session.json');
+    console.log('   • Script stuck? Press Ctrl+C to cancel anytime');
+    console.log('');
+    console.log('🛑 IMPORTANT: Only press ENTER when you can see actual academic content');
+    console.log('   (NOT when you see login pages, loading pages, or redirects)');
     console.log('');
 
-    // Wait for user input
+    // Wait for user input with infinite patience
     const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
@@ -194,14 +200,31 @@ class DomainVerifier {
     });
 
     return new Promise((resolve) => {
-      rl.question('✋ Press ENTER when you have completed login and can see the content: ', () => {
-        rl.close();
-        console.log('');
-        console.log('✅ Great! Continuing with authenticated session...');
-        console.log('💾 Saving session for future use...');
-        this.isAuthenticated = true;
-        resolve();
-      });
+      const askAgain = () => {
+        rl.question('✋ Press ENTER only when login is COMPLETELY finished and you see content: ', (answer) => {
+          if (answer.toLowerCase().includes('help') || answer.toLowerCase().includes('?')) {
+            console.log('');
+            console.log('💬 You should see actual academic content in the browser, not:');
+            console.log('   ❌ Login forms or password fields');
+            console.log('   ❌ Loading or "please wait" pages');
+            console.log('   ❌ Redirect or "you will be redirected" pages');
+            console.log('   ✅ Journal articles, database content, or library resources');
+            console.log('');
+            askAgain();
+          } else {
+            rl.close();
+            console.log('');
+            console.log('🎉 Excellent! Login completed successfully!');
+            console.log('💾 Saving your authenticated session...');
+            console.log('🚀 Proceeding to capture screenshots...');
+            console.log('');
+            this.isAuthenticated = true;
+            resolve();
+          }
+        });
+      };
+      
+      askAgain();
     });
   }
 
@@ -266,19 +289,27 @@ class DomainVerifier {
       
       // Check if this is a login page and handle authentication
       if (!this.isAuthenticated) {
+        console.log('🔍 Checking if authentication is needed...');
         const isLoginPage = await this.detectLoginPage();
         
         if (isLoginPage) {
+          console.log('🔑 Authentication required for this domain');
           await this.promptForLogin();
           await this.saveCookies();
           
-          // Navigate again after authentication
-          console.log(`🔄 Retrying with authenticated session: ${url}`);
+          // Navigate again after authentication to get fresh content
+          console.log(`🔄 Refreshing page with authenticated session...`);
           await this.page.goto(url, { 
             waitUntil: 'networkidle0', 
             timeout: CONFIG.session.navigationTimeout 
           });
+          
+          console.log('✅ Page refreshed with authentication');
+        } else {
+          console.log('✅ No authentication required for this domain');
         }
+      } else {
+        console.log('🔐 Using saved authentication session');
       }
       
       // Add URL overlay to the top of the page (if enabled)

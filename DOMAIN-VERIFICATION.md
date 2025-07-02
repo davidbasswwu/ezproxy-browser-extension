@@ -85,17 +85,19 @@ node scripts/domain-verification.js
 
 **First Run (Authentication Required):**
 1. Script opens browser window with EZProxy login page
-2. **Take your time** to complete login manually in the browser window
-3. Complete any required 2FA or additional authentication steps
-4. Wait until you can see the actual content (not just login page)
-5. Press ENTER in terminal when authentication is complete
-6. Script captures session and proceeds with all domains
+2. **TAKE AS MUCH TIME AS YOU NEED** - there are no time limits
+3. Complete login, 2FA, and any additional authentication steps
+4. Navigate through any redirect pages or prompts
+5. Wait until you see actual academic content (journals, databases, etc.)
+6. Only then press ENTER in terminal to continue
+7. Script captures session and proceeds with all domains
 
-**Generous Timeouts:**
-- 60 seconds for page navigation
-- 10 seconds for login page detection  
-- 2 seconds between each domain
-- No rush - the script is designed to be patient
+**Infinite Patience Approach:**
+- **No time pressure** - take 5, 10, 15+ minutes if needed
+- **2 minute navigation timeout** (only applies to page loading, not login)
+- **15 seconds for login detection** before prompting
+- **2 seconds between domains** for respectful processing
+- **Manual control** - you decide when authentication is complete
 
 **Subsequent Runs (Authenticated):**
 1. Script automatically loads saved session
@@ -231,11 +233,19 @@ const CONFIG = {
 
 ## Troubleshooting
 
-### Common Issues
+### Authentication Issues
+- **Script rushing login**: The script now waits indefinitely for you to complete login
+- **Can't find browser window**: Check your taskbar or dock for the Chromium/Chrome window
+- **Login not working**: Close the browser window and restart the script
+- **Session expired**: Delete `ezproxy-session.json` and run the script again
+- **Multiple login prompts**: University systems sometimes require multiple authentication steps
+- **Redirects after login**: Wait for all redirects to complete before pressing ENTER
+
+### Technical Issues  
 - **Puppeteer installation errors**: Install with `npm install puppeteer --save-dev`
-- **Network timeouts**: Increase timeout values in configuration
-- **Rate limiting**: Reduce `maxConcurrent` value in script configuration
-- **Memory issues**: Process domains in smaller batches for large lists
+- **Network timeouts**: Script uses 2-minute timeouts for page loading
+- **Memory issues**: Script processes domains sequentially to avoid overload
+- **Script hanging**: Press Ctrl+C to cancel and restart if needed
 
 ### Debug Mode
 Enable debug logging by setting environment variable:
