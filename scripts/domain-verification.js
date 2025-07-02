@@ -281,20 +281,17 @@ class DomainVerifier {
   }
 
   async verifyDomain(domain, category) {
-    console.log(`\n🔍 Verifying domain: ${domain} (${category})`);
+    console.log(`\n🔍 Verifying EZProxy domain: ${domain} (${category})`);
     
-    // Test original domain
-    const originalResult = await this.testDomain(domain, category, 'original');
-    
-    // Test EZProxy domain
+    // Test EZProxy domain only
     const ezproxyResult = await this.testDomain(domain, category, 'ezproxy');
     
-    // Take screenshot only of EZProxy domain if accessible
+    // Take screenshot of EZProxy domain if accessible
     if (ezproxyResult.success && ezproxyResult.status === 200) {
       await this.takeScreenshot(domain, 'ezproxy');
     }
     
-    return { originalResult, ezproxyResult };
+    return { ezproxyResult };
   }
 
   async runVerification() {
@@ -308,6 +305,7 @@ class DomainVerifier {
       totalDomains += category.domains.length;
     });
     console.log(`Total domains: ${totalDomains}`);
+    console.log(`Testing: EZProxy domains only`);
     console.log(`Screenshots will be saved to: ${CONFIG.screenshotDir}\n`);
     
     let processedDomains = 0;

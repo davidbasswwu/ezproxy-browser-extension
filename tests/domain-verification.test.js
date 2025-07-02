@@ -89,67 +89,6 @@ describe('Domain Verification Tests', () => {
     return successEntry;
   };
 
-  // Helper function to test domain connectivity
-  const testDomainConnectivity = async (domain, category, timeout = 10000) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    try {
-      const response = await fetch(`https://${domain}`, {
-        method: 'HEAD',
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)'
-        }
-      });
-      clearTimeout(timeoutId);
-      
-      const result = {
-        success: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        url: `https://${domain}`
-      };
-
-      // Flag for follow-up if not a 200 response
-      if (response.status !== 200) {
-        const reason = `Original domain returned ${response.status} ${response.statusText}`;
-        flagDomainForFollowUp(domain, category, reason, 'original', {
-          status: response.status,
-          statusText: response.statusText,
-          url: result.url
-        });
-      } else {
-        recordSuccessfulDomain(domain, category, 'original', {
-          status: response.status,
-          statusText: response.statusText,
-          url: result.url
-        });
-      }
-
-      return result;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      
-      const result = {
-        success: false,
-        error: error.message,
-        type: error.name,
-        url: `https://${domain}`
-      };
-
-      // Flag for follow-up on connection errors
-      const reason = `Original domain connection failed: ${error.message}`;
-      flagDomainForFollowUp(domain, category, reason, 'original', {
-        error: error.message,
-        errorType: error.name,
-        url: result.url
-      });
-
-      return result;
-    }
-  };
 
   // Helper function to test EZProxy version
   const testEZProxyDomain = async (domain, category, timeout = 10000) => {
@@ -277,34 +216,6 @@ describe('Domain Verification Tests', () => {
           testDomains.forEach(domain => {
             describe(`Domain: ${domain}`, () => {
           
-          test(`should be accessible - ${domain}`, async () => {
-            // Mock successful response for original domain
-            fetch.mockResolvedValueOnce({
-              ok: true,
-              status: 200,
-              statusText: 'OK',
-              headers: new Map([
-                ['content-type', 'text/html'],
-                ['server', 'nginx']
-              ])
-            });
-
-            const result = await testDomainConnectivity(domain, categoryName);
-            
-            expect(fetch).toHaveBeenCalledWith(
-              `https://${domain}`,
-              expect.objectContaining({
-                method: 'HEAD',
-                headers: expect.objectContaining({
-                  'User-Agent': expect.stringContaining('EZProxy-Extension-Test')
-                })
-              })
-            );
-
-            expect(result.success).toBe(true);
-            expect(result.status).toBe(200);
-          }, 15000);
-
           test(`should work through EZProxy - ${domain}`, async () => {
             // Mock successful response for EZProxy domain
             fetch.mockResolvedValueOnce({
@@ -334,7 +245,7 @@ describe('Domain Verification Tests', () => {
             expect(result.url).toBe(expectedUrl);
           }, 15000);
 
-          test(`should handle non-200 responses - ${domain}`, async () => {
+          test(`should handle EZProxy non-200 responses - ${domain}`, async () => {
             // Test with different response codes that should be flagged
             const testCases = [
               { status: 404, statusText: 'Not Found' },
@@ -346,7 +257,7 @@ describe('Domain Verification Tests', () => {
             for (const testCase of testCases) {
               fetch.mockClear();
               
-              // Mock non-200 response
+              // Mock non-200 response for EZProxy
               fetch.mockResolvedValueOnce({
                 ok: false,
                 status: testCase.status,
@@ -356,14 +267,14 @@ describe('Domain Verification Tests', () => {
                 ])
               });
 
-              const result = await testDomainConnectivity(domain, categoryName);
+              const result = await testEZProxyDomain(domain, categoryName);
               
               expect(result.success).toBe(false);
               expect(result.status).toBe(testCase.status);
               
               // Verify domain was flagged for follow-up
               const flaggedEntries = verificationResults.flaggedForFollowUp.filter(
-                entry => entry.domain === domain && entry.type === 'original'
+                entry => entry.domain === domain && entry.type === 'ezproxy'
               );
               expect(flaggedEntries.length).toBeGreaterThan(0);
               
@@ -373,8 +284,8 @@ describe('Domain Verification Tests', () => {
             }
           }, 20000);
 
-          test(`should handle connection errors - ${domain}`, async () => {
-            // Test different error scenarios
+          test(`should handle EZProxy connection errors - ${domain}`, async () => {
+            // Test different error scenarios for EZProxy
             const errorCases = [
               { name: 'TypeError', message: 'Failed to fetch' },
               { name: 'AbortError', message: 'The operation was aborted' },
@@ -384,19 +295,19 @@ describe('Domain Verification Tests', () => {
             for (const errorCase of errorCases) {
               fetch.mockClear();
               
-              // Mock connection error
+              // Mock connection error for EZProxy
               const error = new Error(errorCase.message);
               error.name = errorCase.name;
               fetch.mockRejectedValueOnce(error);
 
-              const result = await testDomainConnectivity(domain, categoryName);
+              const result = await testEZProxyDomain(domain, categoryName);
               
               expect(result.success).toBe(false);
               expect(result.error).toBe(errorCase.message);
               
               // Verify domain was flagged for follow-up
               const flaggedEntries = verificationResults.flaggedForFollowUp.filter(
-                entry => entry.domain === domain && entry.type === 'original'
+                entry => entry.domain === domain && entry.type === 'ezproxy'
               );
               expect(flaggedEntries.length).toBeGreaterThan(0);
               

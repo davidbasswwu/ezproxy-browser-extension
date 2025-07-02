@@ -4,11 +4,10 @@ This document describes the automated domain verification system that tests all 
 
 ## Overview
 
-The domain verification system performs comprehensive testing of academic domains to ensure they:
-1. Are accessible and return HTTP 200 responses
-2. Work properly through EZProxy 
-3. Are flagged for follow-up if they don't respond correctly
-4. Have screenshots captured for visual verification with URL overlay
+The domain verification system performs comprehensive testing of academic domains through EZProxy to ensure they:
+1. Work properly through EZProxy and return HTTP 200 responses
+2. Are flagged for follow-up if they don't respond correctly
+3. Have screenshots captured for visual verification with URL overlay
 
 ### Screenshot Features
 - **EZProxy Only**: Screenshots are only taken of domains that successfully load through EZProxy (HTTP 200)
@@ -21,12 +20,12 @@ The domain verification system performs comprehensive testing of academic domain
 
 ### 1. Jest Test Suite (`tests/domain-verification.test.js`)
 - Unit tests with mocked responses for CI/CD integration
-- Tests domain connectivity, EZProxy functionality, and error handling
+- Tests EZProxy functionality and error handling
 - Validates domain categories structure and configuration
 - Runs quickly with mocked network requests
 
 ### 2. Real-World Verification Script (`scripts/domain-verification.js`)
-- Makes actual HTTP requests to test domain accessibility
+- Makes actual HTTP requests to test EZProxy domain accessibility
 - Takes screenshots using Puppeteer (optional dependency)
 - Generates comprehensive reports with flagged domains
 - Handles rate limiting and concurrent requests safely
@@ -103,24 +102,20 @@ npm install puppeteer --save-dev
 
 Domains are automatically flagged for follow-up when:
 
-### Original Domain Issues
-- HTTP status code is not 200 (404, 403, 500, 503, etc.)
-- Connection timeout or network errors
-- DNS resolution failures
-- SSL/TLS certificate errors
-
 ### EZProxy Domain Issues  
-- EZProxy URL returns non-200 status codes
+- EZProxy URL returns non-200 status codes (404, 403, 500, 503, etc.)
 - EZProxy server connectivity issues
 - Authentication or configuration problems
 - Proxy timeout errors
+- DNS resolution failures
+- SSL/TLS certificate errors
 
 ### Common Follow-up Actions
-- **404 Not Found**: Domain may have changed or been discontinued
-- **403 Forbidden**: Access restrictions may be in place
-- **500/503 Errors**: Server issues that may be temporary
-- **Connection Failures**: DNS, network, or infrastructure problems
-- **EZProxy Issues**: Configuration or authentication problems
+- **404 Not Found**: Domain may have changed or EZProxy configuration needs updating
+- **403 Forbidden**: Access restrictions or authentication issues
+- **500/503 Errors**: EZProxy server issues that may be temporary
+- **Connection Failures**: DNS, network, or EZProxy infrastructure problems
+- **302 Redirects**: May indicate login requirements or configuration issues
 
 ## Configuration
 
