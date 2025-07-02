@@ -4,17 +4,47 @@ This document describes the automated domain verification system that tests all 
 
 ## Overview
 
-The domain verification system performs comprehensive testing of academic domains through EZProxy to ensure they:
-1. Work properly through EZProxy and return HTTP 200 responses
-2. Are flagged for follow-up if they don't respond correctly
-3. Have screenshots captured for visual verification with URL overlay
+The domain verification system performs comprehensive testing of academic domains through EZProxy to:
+1. Take screenshots of EZProxy domains for visual verification
+2. Handle login screens with interactive authentication
+3. Maintain authenticated sessions across multiple domains
+4. Provide screenshots with URL overlays showing the EZProxy URLs being tested
 
 ### Screenshot Features
-- **EZProxy Only**: Screenshots are only taken of domains that successfully load through EZProxy (HTTP 200)
+- **EZProxy Only**: Screenshots are taken of EZProxy domains regardless of HTTP response codes
+- **Interactive Authentication**: Automatically detects login screens and prompts for manual login
+- **Session Management**: Maintains authenticated session across all domains after initial login
 - **URL Overlay**: Each screenshot includes a browser-like address bar overlay showing the EZProxy URL being tested
-- **Timestamp**: Screenshots include capture timestamp for reference
-- **Visual Verification**: Easy identification of EZProxy domain accessibility and content loading
+- **Authentication Status**: Screenshots are marked with authentication status (🔐 authenticated, 🌐 public)
 - **Transform Verification**: Screenshots show the correctly transformed domain (dots replaced with dashes)
+
+## Authentication System
+
+The domain verification script includes sophisticated authentication handling:
+
+### Login Detection
+- **Automatic Detection**: Identifies Western Washington University login pages
+- **Multiple Indicators**: Detects login forms, password fields, WWU branding, Shibboleth authentication
+- **Visual Confirmation**: Shows browser window with login page for manual authentication
+
+### Interactive Login Process
+1. **Detection**: Script automatically detects when EZProxy redirects to a login page
+2. **Browser Window**: Opens visible browser window showing the login page
+3. **Manual Login**: User completes authentication manually in the browser
+4. **Session Capture**: Script waits for user confirmation before capturing session cookies
+5. **Reuse**: Authenticated session is maintained for all subsequent domains
+
+### Session Management
+- **Cookie Persistence**: Session cookies are saved to `ezproxy-session.json`
+- **Session Reuse**: Subsequent runs automatically load saved authentication
+- **Cross-Domain**: Single authentication works for all EZProxy domains
+- **Cleanup**: Browser closes automatically after all screenshots are complete
+
+### Security Features
+- **No Credential Storage**: No usernames or passwords are stored in code or config
+- **Manual Authentication**: User maintains full control over the login process
+- **Session File**: Only session cookies are saved (can be deleted anytime)
+- **Visible Browser**: All authentication happens in a visible browser window
 
 ## Components
 
@@ -46,11 +76,28 @@ npm test -- --testNamePattern="domain"
 
 ### Running Real Verification
 ```bash
-# Run actual domain verification with screenshots
+# Run actual domain verification with screenshots and authentication
 npm run verify-domains
 
 # Or run directly
 node scripts/domain-verification.js
+```
+
+**First Run (Authentication Required):**
+1. Script opens browser window with EZProxy login page
+2. Complete login manually in the browser window
+3. Press ENTER in terminal when authentication is complete
+4. Script captures session and proceeds with all domains
+
+**Subsequent Runs (Authenticated):**
+1. Script automatically loads saved session
+2. No manual authentication required
+3. Proceeds directly to screenshot capture
+
+**Clear Session:**
+```bash
+# Remove saved authentication session
+rm ezproxy-session.json
 ```
 
 ### Installing Screenshot Dependencies

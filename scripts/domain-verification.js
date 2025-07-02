@@ -20,7 +20,7 @@ const http = require('http');
 const CONFIG = {
   timeout: 10000,
   userAgent: 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)',
-  maxConcurrent: 5,
+  maxConcurrent: 1, // Set to 1 to reuse browser session
   screenshotDir: path.join(process.cwd(), 'screenshots'),
   reportFile: path.join(process.cwd(), 'domain-verification-report.json'),
   screenshot: {
@@ -28,7 +28,11 @@ const CONFIG = {
     height: 850,
     urlOverlay: true,
     includeTimestamp: true,
-    quality: 90 // JPEG quality if needed
+    quality: 90
+  },
+  session: {
+    cookiesFile: path.join(process.cwd(), 'ezproxy-session.json'),
+    loginDetectionTimeout: 5000
   }
 };
 
@@ -37,14 +41,18 @@ class DomainVerifier {
     this.results = {
       timestamp: new Date().toISOString(),
       summary: {},
-      flaggedForFollowUp: [],
-      successfulDomains: [],
-      failedDomains: [],
-      screenshots: []
+      screenshots: [],
+      errors: []
     };
     
     this.domainCategories = this.loadDomainCategories();
     this.config = this.loadConfig();
+    
+    // Session management
+    this.browser = null;
+    this.page = null;
+    this.isAuthenticated = false;
+    this.sessionCookies = null;
     
     // Ensure screenshots directory exists
     if (!fs.existsSync(CONFIG.screenshotDir)) {
@@ -68,193 +76,240 @@ class DomainVerifier {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   }
 
-  async makeRequest(url, options = {}) {
-    return new Promise((resolve, reject) => {
-      const urlObj = new URL(url);
-      const isHttps = urlObj.protocol === 'https:';
-      const client = isHttps ? https : http;
+  async initializeBrowser() {
+    if (this.browser) return; // Already initialized
+
+    console.log('🚀 Initializing browser for EZProxy session...');
+    
+    // Check if Puppeteer is available
+    let puppeteer;
+    try {
+      puppeteer = require('puppeteer');
+    } catch (error) {
+      throw new Error('Puppeteer not installed. Install with: npm install puppeteer');
+    }
+
+    this.browser = await puppeteer.launch({ 
+      headless: false, // Visible browser for manual login
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        `--window-size=${CONFIG.screenshot.width},${CONFIG.screenshot.height + 100}`
+      ] 
+    });
+
+    this.page = await this.browser.newPage();
+    await this.page.setViewport({ width: CONFIG.screenshot.width, height: CONFIG.screenshot.height });
+    await this.page.setUserAgent(CONFIG.userAgent);
+
+    // Load existing cookies if available
+    await this.loadCookies();
+    
+    console.log('✅ Browser initialized');
+  }
+
+  async detectLoginPage() {
+    try {
+      // Wait a moment for page to load
+      await this.page.waitForTimeout(CONFIG.session.loginDetectionTimeout);
       
-      const requestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || (isHttps ? 443 : 80),
-        path: urlObj.pathname + urlObj.search,
-        method: 'HEAD',
-        headers: {
-          'User-Agent': CONFIG.userAgent,
-          ...options.headers
-        },
-        timeout: CONFIG.timeout
-      };
-
-      const req = client.request(requestOptions, (res) => {
-        resolve({
-          success: true,
-          status: res.statusCode,
-          statusText: res.statusMessage,
-          headers: res.headers,
-          url: url
-        });
+      // Check for common login indicators
+      const loginIndicators = await this.page.evaluate(() => {
+        const indicators = {
+          hasLoginForm: !!document.querySelector('form[name*="login"], form[id*="login"], form[action*="login"]'),
+          hasPasswordField: !!document.querySelector('input[type="password"]'),
+          hasUsernameField: !!document.querySelector('input[type="text"][name*="user"], input[type="email"], input[name*="username"]'),
+          hasWWULogin: document.body.innerHTML.toLowerCase().includes('western washington university'),
+          hasUniversalLogin: document.body.innerHTML.toLowerCase().includes('universal login'),
+          hasShibboleth: document.body.innerHTML.toLowerCase().includes('shibboleth'),
+          currentUrl: window.location.href,
+          pageTitle: document.title
+        };
+        
+        return indicators;
       });
 
-      req.on('error', (error) => {
-        resolve({
-          success: false,
-          error: error.message,
-          type: error.code,
-          url: url
-        });
-      });
+      const isLoginPage = loginIndicators.hasLoginForm || 
+                         (loginIndicators.hasPasswordField && loginIndicators.hasUsernameField) ||
+                         loginIndicators.hasWWULogin ||
+                         loginIndicators.hasUniversalLogin ||
+                         loginIndicators.hasShibboleth;
 
-      req.on('timeout', () => {
-        req.destroy();
-        resolve({
-          success: false,
-          error: 'Request timeout',
-          type: 'TIMEOUT',
-          url: url
-        });
-      });
+      if (isLoginPage) {
+        console.log('\n🔑 LOGIN PAGE DETECTED');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`Page Title: ${loginIndicators.pageTitle}`);
+        console.log(`URL: ${loginIndicators.currentUrl}`);
+        if (loginIndicators.hasWWULogin) console.log('• Western Washington University login detected');
+        if (loginIndicators.hasUniversalLogin) console.log('• Universal login system detected');
+        if (loginIndicators.hasShibboleth) console.log('• Shibboleth authentication detected');
+      }
 
-      req.end();
+      return isLoginPage;
+    } catch (error) {
+      console.log(`⚠️  Login detection failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  async promptForLogin() {
+    console.log('\n👤 MANUAL LOGIN REQUIRED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('A browser window has been opened for you to login.');
+    console.log('Please complete the following steps:');
+    console.log('');
+    console.log('1. 🌐 Login to Western Washington University in the browser window');
+    console.log('2. ✅ Complete any required authentication steps');
+    console.log('3. ⏱️  Wait until you are successfully authenticated');
+    console.log('4. ⌨️  Press ENTER in this terminal to continue...');
+    console.log('');
+    console.log('💡 Tip: The authenticated session will be saved and reused for all domains');
+    console.log('');
+
+    // Wait for user input
+    const readline = require('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    return new Promise((resolve) => {
+      rl.question('Press ENTER when you have completed login: ', () => {
+        rl.close();
+        console.log('✅ Continuing with authenticated session...\n');
+        this.isAuthenticated = true;
+        resolve();
+      });
     });
   }
 
-  async testDomain(domain, category, type = 'original') {
-    const transformedDomain = domain.replace(/\./g, '-');
-    const url = type === 'ezproxy' 
-      ? `https://${transformedDomain}.${this.config.ezproxyBaseUrl}` 
-      : `https://${domain}`;
-    
-    console.log(`Testing ${type} domain: ${url}`);
-    
-    const result = await this.makeRequest(url);
-    
-    const testResult = {
-      domain,
-      category,
-      type,
-      timestamp: new Date().toISOString(),
-      ...result
-    };
-
-    if (!result.success || result.status !== 200) {
-      // Flag for follow-up
-      const reason = result.success 
-        ? `${type} domain returned ${result.status} ${result.statusText}`
-        : `${type} domain connection failed: ${result.error}`;
+  async saveCookies() {
+    try {
+      if (!this.page) return;
       
-      const flaggedEntry = {
-        ...testResult,
-        reason,
-        flagged: true
-      };
+      const cookies = await this.page.cookies();
+      this.sessionCookies = cookies;
       
-      this.results.flaggedForFollowUp.push(flaggedEntry);
-      this.results.failedDomains.push(flaggedEntry);
-      
-      console.log(`❌ FLAGGED: ${domain} (${type}) - ${reason}`);
-    } else {
-      this.results.successfulDomains.push(testResult);
-      console.log(`✅ SUCCESS: ${domain} (${type}) - ${result.status}`);
+      fs.writeFileSync(CONFIG.session.cookiesFile, JSON.stringify(cookies, null, 2));
+      console.log(`💾 Session saved to ${CONFIG.session.cookiesFile}`);
+    } catch (error) {
+      console.log(`⚠️  Failed to save session: ${error.message}`);
     }
-
-    return testResult;
   }
 
-  async takeScreenshot(domain, type = 'original') {
+  async loadCookies() {
     try {
-      // Check if Puppeteer is available
-      let puppeteer;
-      try {
-        puppeteer = require('puppeteer');
-      } catch (error) {
-        console.log(`⚠️  Puppeteer not installed, skipping screenshots. Install with: npm install puppeteer`);
-        return null;
+      if (fs.existsSync(CONFIG.session.cookiesFile)) {
+        const cookies = JSON.parse(fs.readFileSync(CONFIG.session.cookiesFile, 'utf-8'));
+        await this.page.setCookie(...cookies);
+        this.sessionCookies = cookies;
+        this.isAuthenticated = true;
+        console.log('🔄 Loaded existing session');
+        return true;
       }
+    } catch (error) {
+      console.log(`⚠️  Failed to load session: ${error.message}`);
+    }
+    return false;
+  }
+
+  async closeBrowser() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.page = null;
+    }
+  }
+
+
+  async takeScreenshot(domain, type = 'ezproxy') {
+    try {
+      // Ensure browser is initialized
+      await this.initializeBrowser();
 
       const transformedDomain = domain.replace(/\./g, '-');
-      const url = type === 'ezproxy' 
-        ? `https://${transformedDomain}.${this.config.ezproxyBaseUrl}` 
-        : `https://${domain}`;
+      const url = `https://${transformedDomain}.${this.config.ezproxyBaseUrl}`;
       
-      const filename = `screenshot-${domain}${type === 'ezproxy' ? '-ezproxy' : ''}-${Date.now()}.png`;
+      const filename = `screenshot-${domain}-ezproxy-${Date.now()}.png`;
       const filepath = path.join(CONFIG.screenshotDir, filename);
       
       console.log(`📸 Taking screenshot: ${url}`);
       
-      const browser = await puppeteer.launch({ 
-        headless: 'new', // Use new headless mode for better screenshot capabilities
-        args: [
-          '--no-sandbox', 
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          `--window-size=${CONFIG.screenshot.width},${CONFIG.screenshot.height + 50}` // Accommodate URL bar
-        ] 
-      });
-      const page = await browser.newPage();
-      
-      await page.setViewport({ width: CONFIG.screenshot.width, height: CONFIG.screenshot.height });
-      await page.setUserAgent(CONFIG.userAgent);
-      
-      // Set timeout for navigation
-      await page.goto(url, { 
+      // Navigate to the URL
+      await this.page.goto(url, { 
         waitUntil: 'networkidle0', 
         timeout: CONFIG.timeout 
       });
       
+      // Check if this is a login page and handle authentication
+      if (!this.isAuthenticated) {
+        const isLoginPage = await this.detectLoginPage();
+        
+        if (isLoginPage) {
+          await this.promptForLogin();
+          await this.saveCookies();
+          
+          // Navigate again after authentication
+          console.log(`🔄 Retrying screenshot with authenticated session: ${url}`);
+          await this.page.goto(url, { 
+            waitUntil: 'networkidle0', 
+            timeout: CONFIG.timeout 
+          });
+        }
+      }
+      
       // Add URL overlay to the top of the page (if enabled)
       if (CONFIG.screenshot.urlOverlay) {
-        await page.evaluate((url, timestamp, includeTimestamp) => {
-        // Create URL overlay div that looks like a browser address bar
-        const overlay = document.createElement('div');
-        overlay.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="background: #f0f0f0; color: #333; padding: 2px 6px; border-radius: 3px; font-size: 12px;">🔒</span>
-            <strong style="color: #007acc;">URL:</strong>
-            <span style="color: #ddd;">${url}</span>
-            ${includeTimestamp ? `<span style="margin-left: auto; font-size: 12px; color: #999;">${timestamp}</span>` : ''}
-          </div>
-        `;
-        overlay.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(0, 32, 64, 0.9));
-          color: white;
-          padding: 10px 16px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-          font-size: 13px;
-          z-index: 2147483647;
-          border-bottom: 1px solid #007acc;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-          word-break: break-all;
-          backdrop-filter: blur(10px);
-        `;
-        
-        // Ensure we can insert it even if body doesn't exist yet
-        const target = document.body || document.documentElement;
-        if (target.firstChild) {
-          target.insertBefore(overlay, target.firstChild);
-        } else {
-          target.appendChild(overlay);
-        }
-        
-        // Push content down to avoid overlap
-        const bodyStyle = document.body ? document.body.style : null;
-        if (bodyStyle) {
-          bodyStyle.paddingTop = '50px';
-        }
-      }, url, new Date().toISOString(), CONFIG.screenshot.includeTimestamp);
+        await this.page.evaluate((url, timestamp, includeTimestamp) => {
+          // Create URL overlay div that looks like a browser address bar
+          const overlay = document.createElement('div');
+          overlay.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="background: #f0f0f0; color: #333; padding: 2px 6px; border-radius: 3px; font-size: 12px;">🔒</span>
+              <strong style="color: #007acc;">URL:</strong>
+              <span style="color: #ddd;">${url}</span>
+              ${includeTimestamp ? `<span style="margin-left: auto; font-size: 12px; color: #999;">${timestamp}</span>` : ''}
+            </div>
+          `;
+          overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(0, 32, 64, 0.9));
+            color: white;
+            padding: 10px 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-size: 13px;
+            z-index: 2147483647;
+            border-bottom: 1px solid #007acc;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            word-break: break-all;
+            backdrop-filter: blur(10px);
+          `;
+          
+          // Ensure we can insert it even if body doesn't exist yet
+          const target = document.body || document.documentElement;
+          if (target.firstChild) {
+            target.insertBefore(overlay, target.firstChild);
+          } else {
+            target.appendChild(overlay);
+          }
+          
+          // Push content down to avoid overlap
+          const bodyStyle = document.body ? document.body.style : null;
+          if (bodyStyle) {
+            bodyStyle.paddingTop = '50px';
+          }
+        }, url, new Date().toISOString(), CONFIG.screenshot.includeTimestamp);
       }
       
       // Take screenshot with URL overlay
-      await page.screenshot({ 
+      await this.page.screenshot({ 
         path: filepath,
         fullPage: false 
       });
-      
-      await browser.close();
       
       const screenshotData = {
         domain,
@@ -262,7 +317,8 @@ class DomainVerifier {
         url,
         filename,
         filepath,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        authenticated: this.isAuthenticated
       };
       
       this.results.screenshots.push(screenshotData);
@@ -270,32 +326,31 @@ class DomainVerifier {
       
       return screenshotData;
     } catch (error) {
-      console.log(`❌ Screenshot failed for ${domain} (${type}): ${error.message}`);
-      return {
+      console.log(`❌ Screenshot failed for ${domain}: ${error.message}`);
+      const errorData = {
         domain,
-        type,
+        type: 'ezproxy',
+        url: `https://${domain.replace(/\./g, '-')}.${this.config.ezproxyBaseUrl}`,
         error: error.message,
         timestamp: new Date().toISOString()
       };
+      
+      this.results.errors.push(errorData);
+      return errorData;
     }
   }
 
   async verifyDomain(domain, category) {
-    console.log(`\n🔍 Verifying EZProxy domain: ${domain} (${category})`);
+    console.log(`\n🔍 Taking screenshot of EZProxy domain: ${domain} (${category})`);
     
-    // Test EZProxy domain only
-    const ezproxyResult = await this.testDomain(domain, category, 'ezproxy');
+    // Take screenshot of EZProxy domain (regardless of HTTP response)
+    await this.takeScreenshot(domain, 'ezproxy');
     
-    // Take screenshot of EZProxy domain if accessible
-    if (ezproxyResult.success && ezproxyResult.status === 200) {
-      await this.takeScreenshot(domain, 'ezproxy');
-    }
-    
-    return { ezproxyResult };
+    return { domain, category, screenshotTaken: true };
   }
 
   async runVerification() {
-    console.log('🚀 Starting domain verification...\n');
+    console.log('🚀 Starting EZProxy domain screenshot capture...\n');
     console.log(`EZProxy base URL: ${this.config.ezproxyBaseUrl}`);
     console.log(`Total categories: ${Object.keys(this.domainCategories.categories).length}`);
     
@@ -305,7 +360,7 @@ class DomainVerifier {
       totalDomains += category.domains.length;
     });
     console.log(`Total domains: ${totalDomains}`);
-    console.log(`Testing: EZProxy domains only`);
+    console.log(`Action: Taking screenshots of EZProxy domains`);
     console.log(`Screenshots will be saved to: ${CONFIG.screenshotDir}\n`);
     
     let processedDomains = 0;
@@ -313,23 +368,23 @@ class DomainVerifier {
     for (const [categoryName, categoryData] of Object.entries(this.domainCategories.categories)) {
       console.log(`\n📂 Processing category: ${categoryName} (${categoryData.domains.length} domains)`);
       
-      // Process domains in batches to avoid overwhelming servers
+      // Process domains sequentially to maintain session
       const domains = categoryData.domains;
-      for (let i = 0; i < domains.length; i += CONFIG.maxConcurrent) {
-        const batch = domains.slice(i, i + CONFIG.maxConcurrent);
-        const promises = batch.map(domain => this.verifyDomain(domain, categoryName));
+      for (let i = 0; i < domains.length; i++) {
+        const domain = domains[i];
         
         try {
-          await Promise.all(promises);
-          processedDomains += batch.length;
+          await this.verifyDomain(domain, categoryName);
+          processedDomains++;
           console.log(`Progress: ${processedDomains}/${totalDomains} domains processed`);
         } catch (error) {
-          console.error(`Error processing batch: ${error.message}`);
+          console.error(`Error processing ${domain}: ${error.message}`);
+          processedDomains++;
         }
         
-        // Brief pause between batches
-        if (i + CONFIG.maxConcurrent < domains.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // Brief pause between domains
+        if (i < domains.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
     }
@@ -337,30 +392,42 @@ class DomainVerifier {
 
   generateReport() {
     this.results.summary = {
-      totalTested: this.results.successfulDomains.length + this.results.failedDomains.length,
-      successful: this.results.successfulDomains.length,
-      failed: this.results.failedDomains.length,
-      flaggedForFollowUp: this.results.flaggedForFollowUp.length,
-      screenshotsTaken: this.results.screenshots.length
+      totalDomains: this.results.screenshots.length + this.results.errors.length,
+      screenshotsTaken: this.results.screenshots.length,
+      screenshotErrors: this.results.errors.length,
+      authenticated: this.isAuthenticated,
+      sessionSaved: fs.existsSync(CONFIG.session.cookiesFile)
     };
 
     // Write report to file
     fs.writeFileSync(CONFIG.reportFile, JSON.stringify(this.results, null, 2));
     
-    console.log('\n📊 VERIFICATION SUMMARY');
+    console.log('\n📊 SCREENSHOT SUMMARY');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`Total domains tested: ${this.results.summary.totalTested}`);
-    console.log(`✅ Successful: ${this.results.summary.successful}`);
-    console.log(`❌ Failed: ${this.results.summary.failed}`);
-    console.log(`⚠️  Flagged for follow-up: ${this.results.summary.flaggedForFollowUp}`);
+    console.log(`Total domains processed: ${this.results.summary.totalDomains}`);
     console.log(`📸 Screenshots taken: ${this.results.summary.screenshotsTaken}`);
+    console.log(`❌ Screenshot errors: ${this.results.summary.screenshotErrors}`);
+    console.log(`🔐 Authentication status: ${this.isAuthenticated ? 'Authenticated' : 'Not required'}`);
     console.log(`📄 Report saved to: ${CONFIG.reportFile}`);
     
-    if (this.results.flaggedForFollowUp.length > 0) {
-      console.log('\n⚠️  DOMAINS FLAGGED FOR FOLLOW-UP:');
+    if (this.isAuthenticated) {
+      console.log(`💾 Session saved to: ${CONFIG.session.cookiesFile}`);
+    }
+    
+    if (this.results.errors.length > 0) {
+      console.log('\n❌ SCREENSHOT ERRORS:');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      this.results.flaggedForFollowUp.forEach(entry => {
-        console.log(`   • ${entry.domain} (${entry.category}, ${entry.type}): ${entry.reason}`);
+      this.results.errors.forEach(entry => {
+        console.log(`   • ${entry.domain}: ${entry.error}`);
+      });
+    }
+    
+    if (this.results.screenshots.length > 0) {
+      console.log('\n✅ SCREENSHOTS SAVED:');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      this.results.screenshots.forEach(entry => {
+        const authStatus = entry.authenticated ? '🔐' : '🌐';
+        console.log(`   • ${authStatus} ${entry.domain} → ${entry.filename}`);
       });
     }
   }
@@ -372,6 +439,11 @@ class DomainVerifier {
     } catch (error) {
       console.error('❌ Verification failed:', error.message);
       process.exit(1);
+    } finally {
+      // Cleanup
+      console.log('\n🧹 Cleaning up...');
+      await this.closeBrowser();
+      console.log('✅ Browser closed');
     }
   }
 }
