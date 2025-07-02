@@ -119,3 +119,21 @@ CLAUDE.md
 
 screenshots/*
 ezproxy-session.json
+domain-verification-report.json
+domain-screenshot-report.json
+
+# Session and authentication files
+*-session.json
+*-cookies.json
+*-auth.json
+*.session
+*.cookies
+session-*
+cookies-*
+auth-*
+
+# Reports that may contain sensitive URLs or data
+*-report.json
+*-verification*.json
+report-*.json
+verification-*.json

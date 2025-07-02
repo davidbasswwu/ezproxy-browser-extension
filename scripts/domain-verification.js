@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const ScreenshotAnnotator = require('../utils/screenshot-annotator.js');
 
 // Configuration
 const CONFIG = {
@@ -28,7 +29,8 @@ const CONFIG = {
     height: 850,
     urlOverlay: true,
     includeTimestamp: true,
-    quality: 90
+    quality: 90,
+    dynamicContentWait: 1500  // Wait 1.5 seconds for dynamic content to load (authentication banners, etc.)
   },
   session: {
     cookiesFile: path.join(process.cwd(), 'ezproxy-session.json'),
@@ -46,6 +48,15 @@ class DomainVerifier {
       errors: []
     };
     
+    // Check for fresh session flag
+    if (process.argv.includes('--fresh') || process.argv.includes('--new-session')) {
+      console.log('🔄 Fresh session requested - clearing existing authentication');
+      if (fs.existsSync(CONFIG.session.cookiesFile)) {
+        fs.unlinkSync(CONFIG.session.cookiesFile);
+        console.log('✅ Existing session cleared');
+      }
+    }
+    
     // Check required dependencies early
     this.checkDependencies();
     
@@ -57,6 +68,9 @@ class DomainVerifier {
     this.page = null;
     this.isAuthenticated = false;
     this.sessionCookies = null;
+    
+    // Screenshot annotation
+    this.annotator = new ScreenshotAnnotator();
     
     // Ensure screenshots directory exists
     if (!fs.existsSync(CONFIG.screenshotDir)) {
@@ -167,48 +181,55 @@ class DomainVerifier {
 
   async detectLoginPage() {
     try {
-      console.log('🔍 Checking if this is a login page...');
+      console.log('🔍 Checking if this is a WWU authentication page...');
       
-      // Wait longer for page to fully load
-      await this.page.waitForTimeout(CONFIG.session.loginDetectionTimeout);
+      // Wait for page to fully load
+      await new Promise(resolve => setTimeout(resolve, CONFIG.session.loginDetectionTimeout));
       
-      // Check for common login indicators
-      const loginIndicators = await this.page.evaluate(() => {
-        const indicators = {
-          hasLoginForm: !!document.querySelector('form[name*="login"], form[id*="login"], form[action*="login"]'),
-          hasPasswordField: !!document.querySelector('input[type="password"]'),
-          hasUsernameField: !!document.querySelector('input[type="text"][name*="user"], input[type="email"], input[name*="username"]'),
-          hasWWULogin: document.body.innerHTML.toLowerCase().includes('western washington university'),
-          hasUniversalLogin: document.body.innerHTML.toLowerCase().includes('universal login'),
-          hasShibboleth: document.body.innerHTML.toLowerCase().includes('shibboleth'),
-          hasSignIn: document.body.innerHTML.toLowerCase().includes('sign in'),
-          hasAuthentication: document.body.innerHTML.toLowerCase().includes('authentication'),
+      // Get current page URL and basic info - no need to check for general login elements
+      const pageInfo = await this.page.evaluate(() => {
+        return {
           currentUrl: window.location.href,
-          pageTitle: document.title
+          pageTitle: document.title,
+          hasWWUBranding: document.body.innerHTML.toLowerCase().includes('western washington university')
         };
-        
-        return indicators;
       });
 
-      const isLoginPage = loginIndicators.hasLoginForm || 
-                         (loginIndicators.hasPasswordField && loginIndicators.hasUsernameField) ||
-                         loginIndicators.hasWWULogin ||
-                         loginIndicators.hasUniversalLogin ||
-                         loginIndicators.hasShibboleth ||
-                         (loginIndicators.hasSignIn && loginIndicators.hasAuthentication);
+      // Use configuration values for domains and URLs
+      const institutionDomain = this.config.institutionDomain || 'wwu.edu';
+      const ezproxyBaseUrl = this.config.ezproxyBaseUrl || 'ezproxy.library.wwu.edu';
+      const institutionLoginUrl = this.config.institutionLoginUrl || 'https://websso.wwu.edu/cas/login';
+      
+      // Only detect specific institutional authentication URLs - ignore all general site login pages
+      const isLoginPage = pageInfo.currentUrl.startsWith(institutionLoginUrl) ||
+                         pageInfo.currentUrl.includes(`login.${ezproxyBaseUrl}/login`) ||
+                         // EZProxy configuration/menu pages indicate misconfiguration, not authentication
+                         pageInfo.currentUrl.includes(`${ezproxyBaseUrl}/menu`) ||
+                         // Check for institutional Shibboleth authentication URLs only
+                         (pageInfo.currentUrl.includes('shibboleth') && pageInfo.currentUrl.includes(institutionDomain));
 
       if (isLoginPage) {
-        console.log('\n🔑 LOGIN PAGE DETECTED');
+        const institutionShortName = this.config.institutionShortName || 'Institution';
+        console.log(`\n🔑 ${institutionShortName.toUpperCase()} AUTHENTICATION PAGE DETECTED`);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`Page Title: ${loginIndicators.pageTitle}`);
-        console.log(`URL: ${loginIndicators.currentUrl}`);
-        if (loginIndicators.hasWWULogin) console.log('• Western Washington University login detected');
-        if (loginIndicators.hasUniversalLogin) console.log('• Universal login system detected');
-        if (loginIndicators.hasShibboleth) console.log('• Shibboleth authentication detected');
-        if (loginIndicators.hasLoginForm) console.log('• Login form detected');
-        if (loginIndicators.hasPasswordField) console.log('• Password field detected');
+        console.log(`Page Title: ${pageInfo.pageTitle}`);
+        console.log(`URL: ${pageInfo.currentUrl}`);
+        
+        if (pageInfo.currentUrl.startsWith(institutionLoginUrl)) {
+          console.log(`• ${institutionShortName} authentication login detected`);
+        }
+        if (pageInfo.currentUrl.includes(`login.${ezproxyBaseUrl}/login`)) {
+          console.log('• EZProxy login page detected');  
+        }
+        if (pageInfo.currentUrl.includes(`${ezproxyBaseUrl}/menu`)) {
+          console.log('• EZProxy configuration page detected (may indicate setup issue)');
+        }
+        if (pageInfo.currentUrl.includes('shibboleth') && pageInfo.currentUrl.includes(institutionDomain)) {
+          console.log(`• ${institutionShortName} Shibboleth authentication detected`);
+        }
       } else {
-        console.log('✅ No login required - proceeding with screenshot');
+        const institutionShortName = this.config.institutionShortName || 'institutional';
+        console.log(`✅ No ${institutionShortName} authentication required - proceeding with screenshot`);
       }
 
       return isLoginPage;
@@ -305,8 +326,9 @@ class DomainVerifier {
         const cookies = JSON.parse(fs.readFileSync(CONFIG.session.cookiesFile, 'utf-8'));
         await this.page.setCookie(...cookies);
         this.sessionCookies = cookies;
-        this.isAuthenticated = true;
-        console.log('🔄 Loaded existing session');
+        // Don't automatically set isAuthenticated = true
+        // We'll verify authentication when we actually try to access content
+        console.log('🔄 Loaded existing session cookies (verification pending)');
         return true;
       }
     } catch (error) {
@@ -323,7 +345,145 @@ class DomainVerifier {
     }
   }
 
-  async addUrlHeader(inputPath, outputPath, url, timestamp) {
+  async detectInstitutionalAccess() {
+    try {
+      console.log('🔍 Analyzing page for institutional access indicators...');
+      
+      // Get page content and analyze for institutional access
+      const accessDetection = await this.page.evaluate((configData) => {
+        const pageText = document.body ? document.body.textContent : '';
+        
+        // Use ONLY the configured access indicators - no hardcoded values
+        const accessIndicators = [
+          ...(configData.accessIndicators || []),
+          ...(configData.fullAccessIndicators || [])
+        ];
+        
+        // Get institution-specific values from config
+        const institutionIndicators = [
+          configData.institutionName,
+          configData.institutionDomain, 
+          configData.institutionShortName,
+          configData.institutionLibraryName
+        ].filter(indicator => indicator && indicator.trim().length > 0);
+        
+        const foundIndicators = [];
+        const foundElements = [];
+        
+        // Only check for explicit access indicators from config
+        accessIndicators.forEach(indicator => {
+          if (indicator && pageText.toLowerCase().includes(indicator.toLowerCase())) {
+            foundIndicators.push(indicator);
+            
+            // Find the element containing this access indicator
+            const elements = document.querySelectorAll('*');
+            for (const element of elements) {
+              if (element.textContent && element.textContent.toLowerCase().includes(indicator.toLowerCase())) {
+                const rect = element.getBoundingClientRect();
+                const tagName = element.tagName.toLowerCase();
+                
+                // Be very selective about elements - avoid headers, logos, navigation
+                if (rect.width > 0 && rect.height > 0 && 
+                    rect.width < window.innerWidth && rect.height < 100 &&
+                    !['html', 'body', 'main', 'nav', 'header', 'h1', 'h2', 'h3'].includes(tagName) &&
+                    !element.closest('nav, header, .logo, .brand, .site-title')) {
+                  foundElements.push({
+                    text: indicator,
+                    x: Math.round(rect.left),
+                    y: Math.round(rect.top),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    tagName: tagName
+                  });
+                  break; // Take the first good match
+                }
+              }
+            }
+          }
+        });
+        
+        // For institution names, be MUCH more conservative
+        // Only look for them in specific contexts that indicate access
+        institutionIndicators.forEach(indicator => {
+          if (indicator) {
+            // Look for institution name only when preceded by access-related phrases
+            const accessContextPatterns = [
+              `access provided by ${indicator}`,
+              `licensed to ${indicator}`,
+              `subscribed by ${indicator}`,
+              `authenticated via ${indicator}`,
+              `access through ${indicator}`,
+              `you have access via ${indicator}`
+            ];
+            
+            accessContextPatterns.forEach(pattern => {
+              if (pageText.toLowerCase().includes(pattern.toLowerCase())) {
+                foundIndicators.push(pattern);
+                
+                // Find element containing this contextual access indicator
+                const elements = document.querySelectorAll('*');
+                for (const element of elements) {
+                  if (element.textContent && element.textContent.toLowerCase().includes(pattern.toLowerCase())) {
+                    const rect = element.getBoundingClientRect();
+                    const tagName = element.tagName.toLowerCase();
+                    
+                    if (rect.width > 0 && rect.height > 0 && 
+                        rect.width < window.innerWidth && rect.height < 100 &&
+                        !['html', 'body', 'main', 'nav', 'header'].includes(tagName)) {
+                      foundElements.push({
+                        text: pattern,
+                        x: Math.round(rect.left),
+                        y: Math.round(rect.top),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                        tagName: tagName
+                      });
+                      break;
+                    }
+                  }
+                }
+              }
+            });
+          }
+        });
+        
+        return {
+          found: foundIndicators.length > 0,
+          indicators: foundIndicators,
+          elements: foundElements,
+          pageTitle: document.title,
+          currentUrl: window.location.href
+        };
+      }, {
+        accessIndicators: this.config.accessIndicators || [],
+        fullAccessIndicators: this.config.fullAccessIndicators || [],
+        institutionName: this.config.institutionName,
+        institutionDomain: this.config.institutionDomain,
+        institutionShortName: this.config.institutionShortName,
+        institutionLibraryName: this.config.institutionLibraryName
+      });
+      
+      if (accessDetection.found) {
+        console.log(`✅ Institutional access detected!`);
+        console.log(`   Indicators found: ${accessDetection.indicators.join(', ')}`);
+        console.log(`   Elements located: ${accessDetection.elements.length}`);
+        
+        if (accessDetection.elements.length > 0) {
+          const element = accessDetection.elements[0];
+          console.log(`   Best element: "${element.text}" at (${element.x}, ${element.y})`);
+        }
+      } else {
+        console.log(`ℹ️  No institutional access indicators detected`);
+      }
+      
+      return accessDetection;
+    } catch (error) {
+      console.log(`⚠️  Error detecting institutional access: ${error.message}`);
+      return { found: false, indicators: [], elements: [] };
+    }
+  }
+
+  async addUrlHeader(inputPath, outputPath, url, timestamp, domain = null) {
     try {
       // Sharp is guaranteed to be available at this point due to early dependency check
       const sharp = require('sharp');
@@ -338,12 +498,26 @@ class DomainVerifier {
         hour12: true 
       });
 
+      // Extract original URL from domain if provided
+      const originalUrl = domain ? `https://${domain}` : null;
+
       // Read the original screenshot
       const originalImage = sharp(inputPath);
       const { width, height } = await originalImage.metadata();
 
-      // Create header with URL information on single line
+      // Create single-line header with format: EZproxy: URL    Original: URL    Date
       const headerHeight = 40;
+      
+      // Format date as "02 July 2025, 10:43 AM"
+      const formattedDate = date.toLocaleString('en-US', { 
+        day: '2-digit',
+        month: 'long', 
+        year: 'numeric',
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+      
       const headerSvg = `
         <svg width="${width}" height="${headerHeight}" xmlns="http://www.w3.org/2000/svg">
           <defs>
@@ -354,14 +528,10 @@ class DomainVerifier {
           </defs>
           <rect width="100%" height="100%" fill="url(#headerGrad)" />
           <rect x="0" y="${headerHeight-2}" width="100%" height="2" fill="#007acc" />
-          <text x="16" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="500" fill="white">
-            📍 EZProxy URL: 
-          </text>
-          <text x="170" y="26" font-family="system-ui, -apple-system, monospace" font-size="15" fill="#ddd">
-            ${url}
-          </text>
-          <text x="${width-16}" y="26" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#999">
-            ${readableDate}
+          
+          <!-- Single line layout: EZproxy: URL    Original: URL    Date -->
+          <text x="16" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="white">
+            EZproxy: ${url}${originalUrl ? `        Original: ${originalUrl}` : ''}        ${formattedDate}
           </text>
         </svg>
       `;
@@ -394,7 +564,6 @@ class DomainVerifier {
     } catch (error) {
       console.log(`⚠️  Failed to add URL header: ${error.message}`);
       // Fallback: just copy the original file
-      const fs = require('fs');
       fs.copyFileSync(inputPath, outputPath);
     }
   }
@@ -408,40 +577,119 @@ class DomainVerifier {
       const transformedDomain = domain.replace(/\./g, '-');
       const url = `https://${transformedDomain}.${this.config.ezproxyBaseUrl}`;
       
+      // Create date-based folder structure: screenshots/2025/July/03/
+      const now = new Date();
+      const year = now.getFullYear().toString();
+      const month = now.toLocaleString('en-US', { month: 'long' }); // "July"
+      const day = now.getDate().toString().padStart(2, '0'); // "03"
+      
+      const dateFolder = path.join(CONFIG.screenshotDir, year, month, day);
+      
+      // Ensure the date-based directory exists
+      if (!fs.existsSync(dateFolder)) {
+        fs.mkdirSync(dateFolder, { recursive: true });
+        console.log(`📁 Created date folder: ${dateFolder}`);
+      }
+      
       const filename = `screenshot-${domain}-ezproxy-${Date.now()}.png`;
-      const filepath = path.join(CONFIG.screenshotDir, filename);
+      const filepath = path.join(dateFolder, filename);
       
       console.log(`📸 Taking screenshot: ${url}`);
       
       // Navigate to the URL with generous timeout
       console.log(`🌐 Navigating to: ${url}`);
-      await this.page.goto(url, { 
+      const response = await this.page.goto(url, { 
         waitUntil: 'networkidle0', 
         timeout: CONFIG.session.navigationTimeout 
       });
       
-      // Handle authentication on first domain only
-      if (!this.isAuthenticated) {
+      // Check if page is still valid
+      if (!this.page || this.page.isClosed()) {
+        throw new Error('Page is closed or invalid');
+      }
+      
+      // Check for pages that don't need dynamic content waiting (already fully rendered)
+      const currentUrl = await this.page.url();
+      const statusCode = response ? response.status() : 200;
+      const ezproxyBaseUrl = this.config.ezproxyBaseUrl || 'ezproxy.library.wwu.edu';
+      
+      const needsWaiting = !(
+        statusCode === 404 || 
+        currentUrl.includes(`${ezproxyBaseUrl}/menu`) ||
+        currentUrl.includes('login.' + ezproxyBaseUrl + '/menu')
+      );
+      
+      if (needsWaiting) {
+        // Wait additional time for dynamic content to load (authentication banners, etc.)
+        console.log(`⏳ Waiting ${CONFIG.screenshot.dynamicContentWait/1000}s for dynamic content to fully load...`);
+        await new Promise(resolve => setTimeout(resolve, CONFIG.screenshot.dynamicContentWait));
+      } else {
+        if (statusCode === 404) {
+          console.log('📄 404 error page detected - no need to wait for dynamic content');
+        } else {
+          console.log('📄 EZProxy menu page detected - no need to wait for dynamic content');
+        }
+      }
+      
+      
+      // Quick check for EZProxy configuration issues (menu pages)
+      // currentUrl and ezproxyBaseUrl already declared above
+      
+      if (currentUrl.includes(`${ezproxyBaseUrl}/menu`) || currentUrl.includes(`login.${ezproxyBaseUrl}/menu`)) {
+        console.log('\n⚠️  EZPROXY CONFIGURATION ISSUE');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('This domain is not properly configured in EZProxy.');
+        
+        // Mark this as a configuration error
+        const configError = {
+          domain,
+          type: 'ezproxy-config',
+          url: currentUrl,
+          error: 'Domain not configured in EZProxy - redirected to menu page',
+          timestamp: new Date().toISOString()
+        };
+        this.results.errors.push(configError);
+        
+        console.log('📸 Taking screenshot to document the configuration issue...');
+      } else if (!this.isAuthenticated) {
+        // Only check for authentication if we don't already have a session
         console.log('🔍 Checking if authentication is needed...');
         
-        // Always prompt for login on first run, regardless of page content
-        console.log('🔑 First run detected - manual authentication required');
-        console.log('💡 The browser window is open and ready for you to login');
-        
-        await this.promptForLogin();
-        await this.saveCookies();
-        
-        // After login, reload the current page to get authenticated content
-        console.log(`🔄 Reloading page with your authenticated session...`);
-        await this.page.reload({ 
-          waitUntil: 'networkidle0', 
-          timeout: CONFIG.session.navigationTimeout 
-        });
-        
-        console.log('✅ Page reloaded with authentication - ready for screenshot');
+        try {
+          const isLoginPage = await this.detectLoginPage();
+          
+          if (isLoginPage) {
+            console.log('🔑 Login page detected - manual authentication required');
+            console.log('💡 The browser window is open and ready for you to login');
+            
+            await this.promptForLogin();
+            await this.saveCookies();
+            this.isAuthenticated = true;
+            
+            // After login, reload the current page to get authenticated content
+            console.log(`🔄 Reloading page with your authenticated session...`);
+            await this.page.reload({ 
+              waitUntil: 'networkidle0', 
+              timeout: CONFIG.session.navigationTimeout 
+            });
+            
+            console.log(`⏳ Waiting ${CONFIG.screenshot.dynamicContentWait/1000}s for authenticated content to fully load...`);
+            await new Promise(resolve => setTimeout(resolve, CONFIG.screenshot.dynamicContentWait));
+            
+            console.log('✅ Page reloaded with authentication - ready for screenshot');
+          } else {
+            console.log('✅ No login required - proceeding with content');
+            this.isAuthenticated = true;
+          }
+        } catch (error) {
+          console.log(`⚠️  Authentication check failed: ${error.message}`);
+        }
       } else {
-        console.log('🔐 Using saved authentication session');
+        console.log('✅ Using existing authenticated session');
       }
+      
+      // Detect institutional access before taking screenshot
+      const accessDetection = await this.detectInstitutionalAccess();
       
       // Take clean screenshot without overlay
       const tempFilepath = filepath.replace('.png', '-temp.png');
@@ -452,22 +700,71 @@ class DomainVerifier {
       
       console.log(`📸 Clean screenshot captured`);
       
-      // Add URL overlay header using image manipulation (if enabled)
+      // Process screenshot with URL overlay and annotations
+      let processedFilepath = tempFilepath;
+      
+      // Step 1: Add URL overlay header (if enabled)
       if (CONFIG.screenshot.urlOverlay) {
-        await this.addUrlHeader(tempFilepath, filepath, url, new Date().toISOString());
+        const urlHeaderFilepath = filepath.replace('.png', '-with-header.png');
+        await this.addUrlHeader(tempFilepath, urlHeaderFilepath, url, new Date().toISOString(), domain);
+        processedFilepath = urlHeaderFilepath;
+        console.log(`🎨 URL header added with both EZProxy and original URLs`);
+      }
+      
+      // Step 2: Add institutional access annotations (if detected)
+      if (accessDetection.found && accessDetection.elements.length > 0) {
+        console.log(`🎯 Adding institutional access annotations...`);
         
-        // Clean up temp file
-        const fs = require('fs');
-        if (fs.existsSync(tempFilepath)) {
-          fs.unlinkSync(tempFilepath);
+        const element = accessDetection.elements[0];
+        const detectionData = {
+          location: {
+            x: element.x,
+            y: element.y + (CONFIG.screenshot.urlOverlay ? 40 : 0), // Adjust for URL header
+            width: element.width,
+            height: element.height
+          },
+          text: element.text,
+          confidence: 0.95,
+          indicators: accessDetection.indicators
+        };
+        
+        const annotatedFilepath = filepath.replace('.png', '-annotated.png');
+        const success = await this.annotator.annotateScreenshot(
+          processedFilepath, 
+          annotatedFilepath, 
+          detectionData
+        );
+        
+        if (success) {
+          processedFilepath = annotatedFilepath;
+          console.log(`✅ Institutional access annotations added`);
+        } else {
+          console.log(`⚠️  Failed to add annotations, using screenshot without annotations`);
         }
-        
-        console.log(`✅ Screenshot saved with URL header`);
+      }
+      
+      // Step 3: Move final processed file to target location
+      if (processedFilepath !== filepath) {
+        fs.renameSync(processedFilepath, filepath);
+      }
+      
+      // Clean up temporary files
+      const tempFiles = [
+        tempFilepath,
+        filepath.replace('.png', '-with-header.png'),
+        filepath.replace('.png', '-annotated.png')
+      ];
+      
+      tempFiles.forEach(tempFile => {
+        if (tempFile !== filepath && fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+        }
+      });
+      
+      if (accessDetection.found) {
+        console.log(`✅ Screenshot saved with URL header and institutional access annotations`);
       } else {
-        // Just rename temp file to final name
-        const fs = require('fs');
-        fs.renameSync(tempFilepath, filepath);
-        console.log(`✅ Clean screenshot saved`);
+        console.log(`✅ Screenshot saved with URL header`);
       }
       
       const screenshotData = {
@@ -476,12 +773,19 @@ class DomainVerifier {
         url,
         filename,
         filepath,
+        relativePath: path.relative(process.cwd(), filepath), // Show relative path from project root
         timestamp: new Date().toISOString(),
-        authenticated: this.isAuthenticated
+        authenticated: this.isAuthenticated,
+        institutionalAccess: {
+          detected: accessDetection.found,
+          indicators: accessDetection.indicators,
+          elementsFound: accessDetection.elements.length,
+          annotated: accessDetection.found && accessDetection.elements.length > 0
+        }
       };
       
       this.results.screenshots.push(screenshotData);
-      console.log(`✅ Screenshot saved: ${filename}`);
+      console.log(`✅ Screenshot saved: ${path.relative(process.cwd(), filepath)}`);
       
       return screenshotData;
     } catch (error) {
@@ -526,7 +830,14 @@ class DomainVerifier {
     });
     console.log(`Total domains: ${totalDomains}`);
     console.log(`Action: Taking screenshots of EZProxy domains`);
-    console.log(`Screenshots will be saved to: ${CONFIG.screenshotDir}`);
+    
+    // Show today's screenshot folder
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    const month = now.toLocaleString('en-US', { month: 'long' });
+    const day = now.getDate().toString().padStart(2, '0');
+    const todaysFolder = path.join(CONFIG.screenshotDir, year, month, day);
+    console.log(`Screenshots will be saved to: ${todaysFolder}`);
     console.log('');
     console.log('📝 Note: This script will take its time to ensure quality results');
     console.log('⏰ If authentication is required, you will be prompted to login manually');
@@ -552,23 +863,42 @@ class DomainVerifier {
           processedDomains++;
         }
         
-        // Generous pause between domains to avoid overwhelming servers  
+        // Brief pause between domains (reduced since we now wait longer per page)
         if (i < domains.length - 1) {
-          console.log(`\n⏳ Moving to next domain in 2 seconds...`);
+          console.log(`\n⏳ Moving to next domain in 1 second...`);
           console.log(`📊 Progress: ${processedDomains}/${totalDomains} complete`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
     }
   }
 
   generateReport() {
+    // Calculate institutional access statistics
+    const institutionalAccessStats = this.results.screenshots.reduce((stats, screenshot) => {
+      if (screenshot.institutionalAccess) {
+        if (screenshot.institutionalAccess.detected) {
+          stats.detected++;
+          if (screenshot.institutionalAccess.annotated) {
+            stats.annotated++;
+          }
+        }
+      }
+      return stats;
+    }, { detected: 0, annotated: 0 });
+
     this.results.summary = {
       totalDomains: this.results.screenshots.length + this.results.errors.length,
       screenshotsTaken: this.results.screenshots.length,
       screenshotErrors: this.results.errors.length,
       authenticated: this.isAuthenticated,
-      sessionSaved: fs.existsSync(CONFIG.session.cookiesFile)
+      sessionSaved: fs.existsSync(CONFIG.session.cookiesFile),
+      institutionalAccess: {
+        totalDetected: institutionalAccessStats.detected,
+        totalAnnotated: institutionalAccessStats.annotated,
+        detectionRate: this.results.screenshots.length > 0 ? 
+          Math.round((institutionalAccessStats.detected / this.results.screenshots.length) * 100) : 0
+      }
     };
 
     // Write report to file
@@ -580,6 +910,8 @@ class DomainVerifier {
     console.log(`📸 Screenshots taken: ${this.results.summary.screenshotsTaken}`);
     console.log(`❌ Screenshot errors: ${this.results.summary.screenshotErrors}`);
     console.log(`🔐 Authentication status: ${this.isAuthenticated ? 'Authenticated' : 'Not required'}`);
+    console.log(`🎯 Institutional access detected: ${this.results.summary.institutionalAccess.totalDetected} domains (${this.results.summary.institutionalAccess.detectionRate}%)`);
+    console.log(`🏹 Screenshots annotated: ${this.results.summary.institutionalAccess.totalAnnotated}`);
     console.log(`📄 Report saved to: ${CONFIG.reportFile}`);
     
     if (this.isAuthenticated) {
@@ -587,11 +919,25 @@ class DomainVerifier {
     }
     
     if (this.results.errors.length > 0) {
-      console.log('\n❌ SCREENSHOT ERRORS:');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      this.results.errors.forEach(entry => {
-        console.log(`   • ${entry.domain}: ${entry.error}`);
-      });
+      // Separate configuration issues from other errors
+      const configErrors = this.results.errors.filter(e => e.type === 'ezproxy-config');
+      const otherErrors = this.results.errors.filter(e => e.type !== 'ezproxy-config');
+      
+      if (configErrors.length > 0) {
+        console.log('\n⚠️  EZPROXY CONFIGURATION ISSUES:');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        configErrors.forEach(entry => {
+          console.log(`   • ${entry.domain}: Not configured in EZProxy`);
+        });
+      }
+      
+      if (otherErrors.length > 0) {
+        console.log('\n❌ SCREENSHOT ERRORS:');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        otherErrors.forEach(entry => {
+          console.log(`   • ${entry.domain}: ${entry.error}`);
+        });
+      }
     }
     
     if (this.results.screenshots.length > 0) {
@@ -599,8 +945,18 @@ class DomainVerifier {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       this.results.screenshots.forEach(entry => {
         const authStatus = entry.authenticated ? '🔐' : '🌐';
-        console.log(`   • ${authStatus} ${entry.domain} → ${entry.filename}`);
+        const accessStatus = entry.institutionalAccess?.annotated ? '🎯' : 
+                           entry.institutionalAccess?.detected ? '✅' : '⚪';
+        const displayPath = entry.relativePath || entry.filename;
+        console.log(`   • ${authStatus}${accessStatus} ${entry.domain} → ${displayPath}`);
+        if (entry.institutionalAccess?.detected && entry.institutionalAccess.indicators.length > 0) {
+          console.log(`      └─ Access: ${entry.institutionalAccess.indicators.slice(0, 2).join(', ')}${entry.institutionalAccess.indicators.length > 2 ? '...' : ''}`);
+        }
       });
+      
+      console.log('\n🔑 Legend:');
+      console.log('   🔐 = Authenticated  🌐 = No auth needed');
+      console.log('   🎯 = Annotated      ✅ = Access detected  ⚪ = No access detected');
     }
   }
 

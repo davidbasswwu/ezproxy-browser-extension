@@ -7,6 +7,8 @@
     "institutionDomain": "wwu.edu",
     "institutionShortName": "WWU",
     "institutionLibraryName": "WWU Libraries",
+    "institutionLoginUrl": "https://websso.wwu.edu/cas/login",
+    "_comment_institutionLoginUrl": "The institutional authentication login URL. Used by the domain verification script to detect when authentication is required.",
     "libraryHelpUrl": "https://askus.library.wwu.edu/search/?q=",
     "updateInterval": 86400000, 
     "_comment": "updateInterval is in milliseconds (86400000 = 24 hours)",
