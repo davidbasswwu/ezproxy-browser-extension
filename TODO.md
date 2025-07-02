@@ -2,7 +2,6 @@ As of 2 July 2025:
 
 ### Todo
 - [ ] Add a "Automatic Redirect" option that always redirects to EZproxy without the user having to click the button
-- [ ] Make sure any testing-related .json files are added to .gitignore
 - [ ] Submit the extension to the Chrome Web Store 
 
 
@@ -19,3 +18,4 @@ As of 2 July 2025:
 - [x] Make it possible for the user to disable the extension for a specific domain
 - [x] Add a popup to the extension that shows the status of the extension
 - [x] Only show console logs when debug mode is enabled
+- [x] Make sure any testing-related .json files are added to .gitignore
