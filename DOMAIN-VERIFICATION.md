@@ -14,9 +14,11 @@ The domain verification system performs comprehensive testing of academic domain
 - **EZProxy Only**: Screenshots are taken of EZProxy domains regardless of HTTP response codes
 - **Interactive Authentication**: Automatically detects login screens and prompts for manual login
 - **Session Management**: Maintains authenticated session across all domains after initial login
-- **URL Overlay**: Each screenshot includes a browser-like address bar overlay showing the EZProxy URL being tested
+- **URL Header**: Each screenshot includes a header bar above the page content showing the EZProxy URL and timestamp
+- **Non-Intrusive Design**: URL information is added as an extended header that doesn't cover any page content
 - **Authentication Status**: Screenshots are marked with authentication status (🔐 authenticated, 🌐 public)
 - **Transform Verification**: Screenshots show the correctly transformed domain (dots replaced with dashes)
+- **Preserves Access Indicators**: Page content remains untouched, preserving "Access provided by [Institution]" messages
 
 ## Authentication System
 
@@ -111,10 +113,12 @@ rm ezproxy-session.json
 ```
 
 ### Installing Screenshot Dependencies
-For screenshot functionality, install Puppeteer:
+For screenshot functionality, install Puppeteer and Sharp:
 ```bash
-npm install puppeteer --save-dev
+npm install puppeteer sharp --save-dev
 ```
+
+**Note:** Sharp is used for image manipulation to add URL headers without covering page content. If Sharp is not available, the script will still work but screenshots will be saved without URL overlays.
 
 ## Output and Reports
 

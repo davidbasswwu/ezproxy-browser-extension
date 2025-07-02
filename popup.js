@@ -18,9 +18,9 @@ function debugLog(message, data = null) {
         const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
         if (isDebugMode) {
             if (data) {
-                debugLog(`[EZProxy-Popup] ${message}`, data);
+                console.log(`[EZProxy-Popup] ${message}`, data);
             } else {
-                debugLog(`[EZProxy-Popup] ${message}`);
+                console.log(`[EZProxy-Popup] ${message}`);
             }
         }
     } catch (e) {

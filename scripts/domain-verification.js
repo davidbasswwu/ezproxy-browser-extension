@@ -46,6 +46,9 @@ class DomainVerifier {
       errors: []
     };
     
+    // Check required dependencies early
+    this.checkDependencies();
+    
     this.domainCategories = this.loadDomainCategories();
     this.config = this.loadConfig();
     
@@ -58,6 +61,54 @@ class DomainVerifier {
     // Ensure screenshots directory exists
     if (!fs.existsSync(CONFIG.screenshotDir)) {
       fs.mkdirSync(CONFIG.screenshotDir, { recursive: true });
+    }
+  }
+
+  checkDependencies() {
+    const missingDeps = [];
+    
+    // Check for Puppeteer
+    try {
+      require('puppeteer');
+    } catch (error) {
+      missingDeps.push('puppeteer');
+    }
+    
+    // Check for Sharp (only if URL overlay is enabled)
+    if (CONFIG.screenshot.urlOverlay) {
+      try {
+        require('sharp');
+      } catch (error) {
+        missingDeps.push('sharp');
+      }
+    }
+    
+    if (missingDeps.length > 0) {
+      console.log('\n❌ MISSING DEPENDENCIES');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('The domain verification script requires the following dependencies:');
+      console.log('');
+      
+      missingDeps.forEach(dep => {
+        if (dep === 'puppeteer') {
+          console.log('📱 Puppeteer - Browser automation for screenshots and authentication');
+        } else if (dep === 'sharp') {
+          console.log('🎨 Sharp - Image processing for adding URL headers to screenshots');
+        }
+      });
+      
+      console.log('');
+      console.log('🔧 To install missing dependencies, run:');
+      console.log(`   npm install ${missingDeps.join(' ')} --save-dev`);
+      console.log('');
+      console.log('🚀 Then restart the script:');
+      console.log('   npm run verify-domains');
+      console.log('');
+      console.log('💡 Alternative: Run the script without URL overlays by disabling them in CONFIG.screenshot.urlOverlay');
+      console.log('');
+      
+      // Exit the process to force user to install dependencies
+      process.exit(1);
     }
   }
 
@@ -96,7 +147,11 @@ class DomainVerifier {
         '--no-sandbox', 
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        `--window-size=${CONFIG.screenshot.width},${CONFIG.screenshot.height + 100}`
+        '--disable-web-security', // Allow access to chrome:// URLs if needed
+        '--disable-infobars', // Remove info bars
+        '--disable-default-apps',
+        '--no-first-run',
+        `--window-size=${CONFIG.screenshot.width},${CONFIG.screenshot.height + 150}` // Extra height for address bar
       ] 
     });
 
@@ -268,6 +323,82 @@ class DomainVerifier {
     }
   }
 
+  async addUrlHeader(inputPath, outputPath, url, timestamp) {
+    try {
+      // Sharp is guaranteed to be available at this point due to early dependency check
+      const sharp = require('sharp');
+
+      const date = new Date(timestamp);
+      const readableDate = date.toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      // Read the original screenshot
+      const originalImage = sharp(inputPath);
+      const { width, height } = await originalImage.metadata();
+
+      // Create header with URL information on single line
+      const headerHeight = 40;
+      const headerSvg = `
+        <svg width="${width}" height="${headerHeight}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:rgb(0,32,64);stop-opacity:0.95" />
+              <stop offset="100%" style="stop-color:rgb(0,0,0);stop-opacity:0.95" />
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#headerGrad)" />
+          <rect x="0" y="${headerHeight-2}" width="100%" height="2" fill="#007acc" />
+          <text x="16" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="500" fill="white">
+            📍 EZProxy URL: 
+          </text>
+          <text x="170" y="26" font-family="system-ui, -apple-system, monospace" font-size="15" fill="#ddd">
+            ${url}
+          </text>
+          <text x="${width-16}" y="26" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#999">
+            ${readableDate}
+          </text>
+        </svg>
+      `;
+
+      // Convert SVG to buffer
+      const headerBuffer = Buffer.from(headerSvg);
+
+      // Create header image
+      const headerImage = sharp(headerBuffer);
+
+      // Combine header with original screenshot
+      const combinedImage = sharp({
+        create: {
+          width: width,
+          height: height + headerHeight,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 }
+        }
+      })
+      .composite([
+        { input: await headerImage.png().toBuffer(), top: 0, left: 0 },
+        { input: await originalImage.toBuffer(), top: headerHeight, left: 0 }
+      ])
+      .png();
+
+      // Save the final image
+      await combinedImage.toFile(outputPath);
+      
+      console.log(`🎨 Added URL header to screenshot`);
+    } catch (error) {
+      console.log(`⚠️  Failed to add URL header: ${error.message}`);
+      // Fallback: just copy the original file
+      const fs = require('fs');
+      fs.copyFileSync(inputPath, outputPath);
+    }
+  }
+
 
   async takeScreenshot(domain, type = 'ezproxy') {
     try {
@@ -312,57 +443,32 @@ class DomainVerifier {
         console.log('🔐 Using saved authentication session');
       }
       
-      // Add URL overlay to the top of the page (if enabled)
-      if (CONFIG.screenshot.urlOverlay) {
-        await this.page.evaluate((url, timestamp, includeTimestamp) => {
-          // Create URL overlay div that looks like a browser address bar
-          const overlay = document.createElement('div');
-          overlay.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="background: #f0f0f0; color: #333; padding: 2px 6px; border-radius: 3px; font-size: 12px;">🔒</span>
-              <strong style="color: #007acc;">URL:</strong>
-              <span style="color: #ddd;">${url}</span>
-              ${includeTimestamp ? `<span style="margin-left: auto; font-size: 12px; color: #999;">${timestamp}</span>` : ''}
-            </div>
-          `;
-          overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(0, 32, 64, 0.9));
-            color: white;
-            padding: 10px 16px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            font-size: 13px;
-            z-index: 2147483647;
-            border-bottom: 1px solid #007acc;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            word-break: break-all;
-            backdrop-filter: blur(10px);
-          `;
-          
-          // Ensure we can insert it even if body doesn't exist yet
-          const target = document.body || document.documentElement;
-          if (target.firstChild) {
-            target.insertBefore(overlay, target.firstChild);
-          } else {
-            target.appendChild(overlay);
-          }
-          
-          // Push content down to avoid overlap
-          const bodyStyle = document.body ? document.body.style : null;
-          if (bodyStyle) {
-            bodyStyle.paddingTop = '50px';
-          }
-        }, url, new Date().toISOString(), CONFIG.screenshot.includeTimestamp);
-      }
-      
-      // Take screenshot with URL overlay
+      // Take clean screenshot without overlay
+      const tempFilepath = filepath.replace('.png', '-temp.png');
       await this.page.screenshot({ 
-        path: filepath,
+        path: tempFilepath,
         fullPage: false 
       });
+      
+      console.log(`📸 Clean screenshot captured`);
+      
+      // Add URL overlay header using image manipulation (if enabled)
+      if (CONFIG.screenshot.urlOverlay) {
+        await this.addUrlHeader(tempFilepath, filepath, url, new Date().toISOString());
+        
+        // Clean up temp file
+        const fs = require('fs');
+        if (fs.existsSync(tempFilepath)) {
+          fs.unlinkSync(tempFilepath);
+        }
+        
+        console.log(`✅ Screenshot saved with URL header`);
+      } else {
+        // Just rename temp file to final name
+        const fs = require('fs');
+        fs.renameSync(tempFilepath, filepath);
+        console.log(`✅ Clean screenshot saved`);
+      }
       
       const screenshotData = {
         domain,

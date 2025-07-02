@@ -91,7 +91,7 @@ async function getConfig() {
         // Return a minimal safe default config
         return {
             institutionName: 'Institution',
-            accessIndicators: ['access provided by', 'authenticated via', 'logged in as'],
+            accessIndicators: ['access provided by', 'authenticated via', 'logged in as','I have access via'],
             bannerMessage: 'This resource is available through your institution. Access the full content via EZProxy.'
         };
     }
@@ -173,13 +173,6 @@ async function hasInstitutionalAccess(config) {
     // Get current domain to check for special cases
     // const currentHostname = window.location.hostname.toLowerCase();
     
-    // // IMPORTANT: For Nature and Chronicle, we'll return false to ensure the banner shows
-    // // This is a temporary fix to ensure consistent banner display
-    // if (currentHostname.includes('nature.com') || currentHostname.includes('chronicle.com')) {
-    //     debugLog(`[hasInstitutionalAccess] Special case for ${currentHostname}: forcing banner display`);
-    //     return false;
-    // }
-    
     // Enhanced page text extraction with multiple methods
     let pageText = '';
     
@@ -242,7 +235,7 @@ async function hasInstitutionalAccess(config) {
     }
     
     if (!pageText) {
-        console.warn('[hasInstitutionalAccess] Could not get page text after multiple extraction attempts');
+        debugLog('[hasInstitutionalAccess] Could not get page text after multiple extraction attempts');
         // Don't return false immediately - continue with other checks
     }
     
@@ -255,15 +248,6 @@ async function hasInstitutionalAccess(config) {
     // Check if this is a domain we want to debug (can be enabled via localStorage)
     const debugHostname = window.location.hostname.toLowerCase();
     const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
-    if (isDebugMode && debugHostname.includes('ft.com')) {
-        debugLog('hasInstitutionalAccess debugging for ft.com', {
-            hostname: debugHostname,
-            url: window.location.href,
-            pageTextLength: pageText.length,
-            pageTextSample: pageText.substring(0, 500)
-        });
-        return false; // Force banner to show for debugging
-    }
     
     // Check for VERY SPECIFIC indicators of institutional access
     // Only look for explicit, unambiguous access indicators to avoid false positives
@@ -282,7 +266,8 @@ async function hasInstitutionalAccess(config) {
         `licensed to ${instName}`,
         'you are accessing this content through your institution',
         'institutional subscription',
-        'institutional license'
+        'institutional license',
+        'I have access via'
     ];
     
     // Add any custom indicators from config (but only if explicitly configured)
@@ -308,7 +293,8 @@ async function hasInstitutionalAccess(config) {
         'access provided by',
         'site license access provided by',
         'licensed to',
-        'access through'
+        'access through',
+        'I have access via'
     ];
     
     // Create combinations of access phrases with institution names
@@ -358,7 +344,7 @@ async function hasInstitutionalAccess(config) {
     debugConsole(`[EZProxy DEBUG] Finished checking indicators. Found: ${foundIndicators.length}`);
     
     if (foundIndicators.length > 0) {
-        console.warn('[hasInstitutionalAccess] ⚠️  INSTITUTIONAL ACCESS DETECTED - BANNER WILL NOT SHOW');
+        debugLog('[hasInstitutionalAccess] ⚠️  INSTITUTIONAL ACCESS DETECTED - BANNER WILL NOT SHOW');
         debugLog('[hasInstitutionalAccess] Found access indicators:', foundIndicators);
         debugLog('[hasInstitutionalAccess] Current URL:', window.location.href);
         debugLog('[hasInstitutionalAccess] Page title:', document.title);

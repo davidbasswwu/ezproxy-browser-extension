@@ -116,3 +116,6 @@ coverage/
 node_modules
 
 CLAUDE.md
+
+screenshots/*
+ezproxy-session.json

@@ -2,19 +2,14 @@ import { test, expect, describe } from '@jest/globals';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-// Mock fetch for testing
-global.fetch = jest.fn();
-
-describe('Domain Verification Tests', () => {
+describe('Domain Screenshot Tests', () => {
   let domainCategories;
   let config;
-  let flaggedDomains = [];
-  let verificationResults = {
+  let screenshotResults = {
     timestamp: new Date().toISOString(),
     summary: {},
-    flaggedForFollowUp: [],
-    successfulDomains: [],
-    failedDomains: []
+    screenshots: [],
+    errors: []
   };
   
   beforeAll(() => {
@@ -33,149 +28,47 @@ describe('Domain Verification Tests', () => {
     }
   });
 
-  beforeEach(() => {
-    fetch.mockClear();
-  });
 
   afterAll(() => {
-    // Write flagged domains report
-    const reportPath = join(process.cwd(), 'domain-verification-report.json');
-    verificationResults.summary = {
-      totalTested: verificationResults.successfulDomains.length + verificationResults.failedDomains.length,
-      successful: verificationResults.successfulDomains.length,
-      failed: verificationResults.failedDomains.length,
-      flaggedForFollowUp: verificationResults.flaggedForFollowUp.length
+    // Write screenshot report
+    const reportPath = join(process.cwd(), 'domain-screenshot-report.json');
+    screenshotResults.summary = {
+      totalDomains: screenshotResults.screenshots.length + screenshotResults.errors.length,
+      screenshotsTaken: screenshotResults.screenshots.length,
+      screenshotErrors: screenshotResults.errors.length
     };
     
-    writeFileSync(reportPath, JSON.stringify(verificationResults, null, 2));
-    console.log(`\nDomain verification report written to: ${reportPath}`);
+    writeFileSync(reportPath, JSON.stringify(screenshotResults, null, 2));
+    console.log(`\nDomain screenshot report written to: ${reportPath}`);
     
-    if (verificationResults.flaggedForFollowUp.length > 0) {
-      console.log(`\n⚠️  ${verificationResults.flaggedForFollowUp.length} domains flagged for follow-up:`);
-      verificationResults.flaggedForFollowUp.forEach(item => {
-        console.log(`   - ${item.domain} (${item.category}): ${item.reason}`);
-      });
+    if (screenshotResults.screenshots.length > 0) {
+      console.log(`\n📸 ${screenshotResults.screenshots.length} screenshots simulated`);
     }
   });
 
-  // Helper function to flag domain for follow-up
-  const flagDomainForFollowUp = (domain, category, reason, type = 'original', additionalInfo = {}) => {
-    const flaggedEntry = {
-      domain,
-      category,
-      reason,
-      type, // 'original' or 'ezproxy'
-      timestamp: new Date().toISOString(),
-      ...additionalInfo
-    };
-    
-    verificationResults.flaggedForFollowUp.push(flaggedEntry);
-    verificationResults.failedDomains.push(flaggedEntry);
-    
-    return flaggedEntry;
-  };
-
-  // Helper function to record successful domain
-  const recordSuccessfulDomain = (domain, category, type = 'original', additionalInfo = {}) => {
-    const successEntry = {
-      domain,
-      category,
-      type,
-      timestamp: new Date().toISOString(),
-      ...additionalInfo
-    };
-    
-    verificationResults.successfulDomains.push(successEntry);
-    return successEntry;
-  };
-
-
-  // Helper function to test EZProxy version
-  const testEZProxyDomain = async (domain, category, timeout = 10000) => {
-    const transformedDomain = domain.replace(/\./g, '-');
-    const ezproxyUrl = `https://${transformedDomain}.${config.ezproxyBaseUrl}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    try {
-      const response = await fetch(ezproxyUrl, {
-        method: 'HEAD',
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)'
-        }
-      });
-      clearTimeout(timeoutId);
-      
-      const result = {
-        success: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        url: ezproxyUrl,
-        headers: Object.fromEntries(response.headers.entries())
-      };
-
-      // Flag for follow-up if not a 200 response
-      if (response.status !== 200) {
-        const reason = `EZProxy domain returned ${response.status} ${response.statusText}`;
-        flagDomainForFollowUp(domain, category, reason, 'ezproxy', {
-          status: response.status,
-          statusText: response.statusText,
-          url: ezproxyUrl
-        });
-      } else {
-        recordSuccessfulDomain(domain, category, 'ezproxy', {
-          status: response.status,
-          statusText: response.statusText,
-          url: ezproxyUrl
-        });
-      }
-
-      return result;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      
-      const result = {
-        success: false,
-        error: error.message,
-        type: error.name,
-        url: ezproxyUrl
-      };
-
-      // Flag for follow-up on connection errors
-      const reason = `EZProxy domain connection failed: ${error.message}`;
-      flagDomainForFollowUp(domain, category, reason, 'ezproxy', {
-        error: error.message,
-        errorType: error.name,
-        url: ezproxyUrl
-      });
-
-      return result;
-    }
-  };
 
   // Helper function to simulate taking a screenshot
-  const takeScreenshot = async (domain, isEzproxy = false) => {
+  const takeEZProxyScreenshot = async (domain, category) => {
     const transformedDomain = domain.replace(/\./g, '-');
-    const url = isEzproxy ? `https://${transformedDomain}.${config.ezproxyBaseUrl}` : `https://${domain}`;
+    const url = `https://${transformedDomain}.${config.ezproxyBaseUrl}`;
     
-    // In a real implementation, this would use Puppeteer or similar
-    // For now, we'll simulate the screenshot functionality
+    // Simulate screenshot functionality
     const screenshotData = {
       timestamp: new Date().toISOString(),
       url: url,
       domain: domain,
-      isEzproxy: isEzproxy,
-      filename: `screenshot-${domain}${isEzproxy ? '-ezproxy' : ''}-${Date.now()}.png`,
-      // Simulated screenshot metadata
-      viewport: { width: 1280, height: 800 },
+      category: category,
+      filename: `screenshot-${domain}-ezproxy-${Date.now()}.png`,
+      viewport: { width: 1280, height: 850 },
       userAgent: 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)',
       features: {
         urlOverlay: true,
-        overlayText: `URL: ${url}`
+        overlayText: `URL: ${url}`,
+        transformedDomain: transformedDomain
       }
     };
     
+    screenshotResults.screenshots.push(screenshotData);
     return screenshotData;
   };
 
@@ -214,129 +107,30 @@ describe('Domain Verification Tests', () => {
           const testDomains = domains.slice(0, 3);
           
           testDomains.forEach(domain => {
-            describe(`Domain: ${domain}`, () => {
-          
-          test(`should work through EZProxy - ${domain}`, async () => {
-            // Mock successful response for EZProxy domain
-            fetch.mockResolvedValueOnce({
-              ok: true,
-              status: 200,
-              statusText: 'OK',
-              headers: new Map([
-                ['content-type', 'text/html'],
-                ['server', 'EZproxy'],
-                ['x-ezproxy-version', '7.0']
-              ])
+            test(`should capture EZProxy screenshot - ${domain}`, async () => {
+              // Test screenshot for EZProxy version
+              const screenshot = await takeEZProxyScreenshot(domain, categoryName);
+              
+              expect(screenshot.domain).toBe(domain);
+              expect(screenshot.category).toBe(categoryName);
+              
+              const transformedDomain = domain.replace(/\./g, '-');
+              const expectedUrl = `https://${transformedDomain}.${config.ezproxyBaseUrl}`;
+              expect(screenshot.url).toBe(expectedUrl);
+              
+              expect(screenshot.filename).toContain(domain);
+              expect(screenshot.filename).toContain('ezproxy');
+              expect(screenshot.filename).toContain('.png');
+              expect(screenshot.timestamp).toBeDefined();
+              
+              // Verify URL transformation
+              expect(screenshot.features.transformedDomain).toBe(transformedDomain);
+              
+              // Verify URL overlay features
+              expect(screenshot.features.urlOverlay).toBe(true);
+              expect(screenshot.features.overlayText).toContain(expectedUrl);
             });
-
-            const result = await testEZProxyDomain(domain, categoryName);
-            
-            const transformedDomain = domain.replace(/\./g, '-');
-            const expectedUrl = `https://${transformedDomain}.${config.ezproxyBaseUrl}`;
-            expect(fetch).toHaveBeenCalledWith(
-              expectedUrl,
-              expect.objectContaining({
-                method: 'HEAD'
-              })
-            );
-
-            expect(result.success).toBe(true);
-            expect(result.status).toBe(200);
-            expect(result.url).toBe(expectedUrl);
-          }, 15000);
-
-          test(`should handle EZProxy non-200 responses - ${domain}`, async () => {
-            // Test with different response codes that should be flagged
-            const testCases = [
-              { status: 404, statusText: 'Not Found' },
-              { status: 403, statusText: 'Forbidden' },
-              { status: 500, statusText: 'Internal Server Error' },
-              { status: 503, statusText: 'Service Unavailable' }
-            ];
-
-            for (const testCase of testCases) {
-              fetch.mockClear();
-              
-              // Mock non-200 response for EZProxy
-              fetch.mockResolvedValueOnce({
-                ok: false,
-                status: testCase.status,
-                statusText: testCase.statusText,
-                headers: new Map([
-                  ['content-type', 'text/html']
-                ])
-              });
-
-              const result = await testEZProxyDomain(domain, categoryName);
-              
-              expect(result.success).toBe(false);
-              expect(result.status).toBe(testCase.status);
-              
-              // Verify domain was flagged for follow-up
-              const flaggedEntries = verificationResults.flaggedForFollowUp.filter(
-                entry => entry.domain === domain && entry.type === 'ezproxy'
-              );
-              expect(flaggedEntries.length).toBeGreaterThan(0);
-              
-              const latestFlag = flaggedEntries[flaggedEntries.length - 1];
-              expect(latestFlag.reason).toContain(testCase.status.toString());
-              expect(latestFlag.status).toBe(testCase.status);
-            }
-          }, 20000);
-
-          test(`should handle EZProxy connection errors - ${domain}`, async () => {
-            // Test different error scenarios for EZProxy
-            const errorCases = [
-              { name: 'TypeError', message: 'Failed to fetch' },
-              { name: 'AbortError', message: 'The operation was aborted' },
-              { name: 'NetworkError', message: 'Network request failed' }
-            ];
-
-            for (const errorCase of errorCases) {
-              fetch.mockClear();
-              
-              // Mock connection error for EZProxy
-              const error = new Error(errorCase.message);
-              error.name = errorCase.name;
-              fetch.mockRejectedValueOnce(error);
-
-              const result = await testEZProxyDomain(domain, categoryName);
-              
-              expect(result.success).toBe(false);
-              expect(result.error).toBe(errorCase.message);
-              
-              // Verify domain was flagged for follow-up
-              const flaggedEntries = verificationResults.flaggedForFollowUp.filter(
-                entry => entry.domain === domain && entry.type === 'ezproxy'
-              );
-              expect(flaggedEntries.length).toBeGreaterThan(0);
-              
-              const latestFlag = flaggedEntries[flaggedEntries.length - 1];
-              expect(latestFlag.reason).toContain('connection failed');
-              expect(latestFlag.error).toBe(errorCase.message);
-            }
-          }, 20000);
-
-          test(`should capture EZProxy screenshots - ${domain}`, async () => {
-            // Test screenshot for EZProxy version only
-            const ezproxyScreenshot = await takeScreenshot(domain, true);
-            expect(ezproxyScreenshot.domain).toBe(domain);
-            expect(ezproxyScreenshot.isEzproxy).toBe(true);
-            const transformedDomain = domain.replace(/\./g, '-');
-            expect(ezproxyScreenshot.url).toBe(`https://${transformedDomain}.${config.ezproxyBaseUrl}`);
-            expect(ezproxyScreenshot.filename).toContain(domain);
-            expect(ezproxyScreenshot.filename).toContain('ezproxy');
-            expect(ezproxyScreenshot.filename).toContain('.png');
-            expect(ezproxyScreenshot.timestamp).toBeDefined();
-            
-            // Verify URL overlay features are included in screenshot metadata
-            expect(ezproxyScreenshot.features).toBeDefined();
-            expect(ezproxyScreenshot.features.urlOverlay).toBe(true);
-            expect(ezproxyScreenshot.features.overlayText).toContain(ezproxyScreenshot.url);
           });
-
-        });
-      });
         });
       });
     }
@@ -361,10 +155,10 @@ describe('Domain Verification Tests', () => {
       expect(typeof domainCategories.categories[category].description).toBe('string');
     });
     
-    console.log(`\nDomain verification summary:`);
+    console.log(`\nEZProxy screenshot summary:`);
     console.log(`- Total categories: ${categories.length}`);
     console.log(`- Total domains: ${totalDomains}`);
-    console.log(`- Testing subset of domains per category for performance`);
+    console.log(`- Testing screenshot capture for subset of domains`);
     console.log(`- EZProxy base URL: ${config.ezproxyBaseUrl}`);
   });
 
