@@ -1,12 +1,13 @@
-As of 30 June 2025:
+As of 2 July 2025:
 
 ### Todo
 - [ ] Add a "Automatic Redirect" option that always redirects to EZproxy without the user having to click the button
-- [ ] Create an automated test for each domain
+- [ ] Make sure any testing-related .json files are added to .gitignore
 - [ ] Submit the extension to the Chrome Web Store 
 
 
 ### In Progress
+- [ ] Create an automated test for each domain
 - [ ] Testing each domain in the list
 - [ ] Create a navigation sidebar that shows the domains grouped by subject matter
 

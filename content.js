@@ -246,61 +246,36 @@ async function hasInstitutionalAccess(config) {
     debugLog('[hasInstitutionalAccess] Using institution:', instName, 'domain:', configDomain);
     
     // Check if this is a domain we want to debug (can be enabled via localStorage)
-    const debugHostname = window.location.hostname.toLowerCase();
-    const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
+    // const debugHostname = window.location.hostname.toLowerCase();
+    // const isDebugMode = localStorage.getItem('ezproxy-debug') === 'true';
     
-    // Check for VERY SPECIFIC indicators of institutional access
-    // Only look for explicit, unambiguous access indicators to avoid false positives
-    const accessIndicators = [
-        // Only very specific access indicators that clearly indicate institutional access
-        'access provided by',
-        'authenticated via',
-        'logged in as',
-        'institutional access granted',
-        'institution=',
-        `institution=${instName}`,
-        `institution=${configDomain}`,
-        // Very specific institutional phrases
-        `site license access provided by ${instName}`,
-        `access through ${instName}`,
-        `licensed to ${instName}`,
-        'you are accessing this content through your institution',
-        'institutional subscription',
-        'institutional license',
-        'I have access via'
-    ];
+    // Use ONLY configured access indicators - no hardcoded values
+    const accessIndicators = [];
     
-    // Add any custom indicators from config (but only if explicitly configured)
+    // Add configured access indicators
     if (Array.isArray(config.accessIndicators)) {
         accessIndicators.push(...config.accessIndicators.map(i => i.toLowerCase()));
     }
     
-    // Add full access indicators from config (but only if explicitly configured)
+    // Add configured full access indicators
     if (Array.isArray(config.fullAccessIndicators)) {
         accessIndicators.push(...config.fullAccessIndicators.map(i => i.toLowerCase()));
     }
     
-    // Add institution-specific combinations for better detection
+    // Get institution-specific values from config only
     const institutionNames = [
-        instName.toLowerCase(),
-        (config.institutionDomain || '').toLowerCase(),
-        (config.institutionShortName || '').toLowerCase(),
-        (config.institutionLibraryName || '').toLowerCase()
-    ].filter(name => name && name.length > 0);
+        config.institutionName,
+        config.institutionDomain,
+        config.institutionShortName,
+        config.institutionLibraryName
+    ].filter(name => name && name.trim().length > 0);
     
-    // Add combined phrases that indicate institutional access
-    const accessPhrases = [
-        'access provided by',
-        'site license access provided by',
-        'licensed to',
-        'access through',
-        'I have access via'
-    ];
-    
-    // Create combinations of access phrases with institution names
-    accessPhrases.forEach(phrase => {
+    // Create combinations with access indicators only (not standalone institution names)
+    // This prevents false positives from website names/logos
+    const configuredAccessPhrases = config.accessIndicators || [];
+    configuredAccessPhrases.forEach(phrase => {
         institutionNames.forEach(name => {
-            accessIndicators.push(`${phrase} ${name}`);
+            accessIndicators.push(`${phrase.toLowerCase()} ${name.toLowerCase()}`);
         });
     });
     
@@ -324,7 +299,7 @@ async function hasInstitutionalAccess(config) {
     // Check for access indicators in page text
     const foundIndicators = [];
     debugConsole(`[EZProxy DEBUG] About to check ${accessIndicators.length} indicators against page text`);
-    accessIndicators.forEach((indicator, index) => {
+    accessIndicators.forEach((indicator) => {
         if (!indicator) return;
         const found = normalizedPageText.includes(indicator.toLowerCase());
         if (found) {
@@ -362,6 +337,11 @@ async function hasInstitutionalAccess(config) {
             existingBanner.remove();
             restorePageMargin();
         }
+        
+        // Create visual indicator showing institutional access is detected
+        createInstitutionalAccessIndicator(foundIndicators).catch(error => {
+            console.warn('[hasInstitutionalAccess] Error creating visual indicator:', error);
+        });
         
         return true;
     }
@@ -547,6 +527,152 @@ function restorePageMargin() {
     if (!banner) {
         document.body.style.marginTop = '';
     }
+}
+
+/**
+ * Creates a visual indicator pointing to detected institutional access
+ * @param {Array} foundIndicators - Array of detected access indicators
+ */
+async function createInstitutionalAccessIndicator(foundIndicators) {
+    // Remove any existing indicator
+    const existingIndicator = document.getElementById('ezproxy-access-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    
+    // Get institution name from config
+    const config = await getConfig();
+    const institutionName = config.institutionName || 'Western Washington University';
+    
+    // Try to find the text content that contains institutional access indicators
+    let targetElement = null;
+    
+    // First, try to find elements containing the institution name
+    const allElements = document.querySelectorAll('*');
+    for (const element of allElements) {
+        if (element.textContent && element.textContent.includes(institutionName)) {
+            // Make sure this element is visible and not too large (like body or html)
+            const rect = element.getBoundingClientRect();
+            const tagName = element.tagName.toLowerCase();
+            
+            if (rect.width > 0 && rect.height > 0 && 
+                rect.width < window.innerWidth && rect.height < 200 &&
+                !['html', 'body', 'main', 'div'].includes(tagName)) {
+                targetElement = element;
+                break;
+            }
+        }
+    }
+    
+    // If we didn't find the institution name specifically, try to find access indicators
+    if (!targetElement) {
+        for (const indicator of foundIndicators) {
+            for (const element of allElements) {
+                if (element.textContent && 
+                    element.textContent.toLowerCase().includes(indicator.toLowerCase())) {
+                    const rect = element.getBoundingClientRect();
+                    const tagName = element.tagName.toLowerCase();
+                    
+                    if (rect.width > 0 && rect.height > 0 && 
+                        rect.width < window.innerWidth && rect.height < 100 &&
+                        !['html', 'body', 'main'].includes(tagName)) {
+                        targetElement = element;
+                        break;
+                    }
+                }
+            }
+            if (targetElement) break;
+        }
+    }
+    
+    if (!targetElement) {
+        debugLog('[InstitutionalAccess] Could not find target element for visual indicator');
+        return;
+    }
+    
+    const rect = targetElement.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+    
+    // Create the indicator container
+    const indicator = document.createElement('div');
+    indicator.id = 'ezproxy-access-indicator';
+    indicator.style.cssText = `
+        position: absolute;
+        z-index: 2147483646;
+        pointer-events: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    `;
+    
+    // Position the indicator pointing to the target element
+    const indicatorTop = rect.top + scrollTop - 60;
+    const indicatorLeft = rect.left + scrollLeft + rect.width + 20;
+    
+    indicator.style.top = indicatorTop + 'px';
+    indicator.style.left = indicatorLeft + 'px';
+    
+    // Create arrow and message
+    indicator.innerHTML = `
+        <div style="
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+            animation: ezproxy-pulse 2s ease-in-out infinite;
+        ">
+            <span style="font-size: 16px;">✅</span>
+            <span>You have institutional access!</span>
+        </div>
+        <div style="
+            position: absolute;
+            left: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 10px solid #22c55e;
+        "></div>
+    `;
+    
+    // Add CSS animation if not already added
+    if (!document.getElementById('ezproxy-access-indicator-styles')) {
+        const style = document.createElement('style');
+        style.id = 'ezproxy-access-indicator-styles';
+        style.textContent = `
+            @keyframes ezproxy-pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.05); opacity: 0.9; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // Add to page
+    document.body.appendChild(indicator);
+    
+    // Auto-remove after 8 seconds
+    setTimeout(() => {
+        if (document.body.contains(indicator)) {
+            indicator.style.transition = 'opacity 0.5s ease-out';
+            indicator.style.opacity = '0';
+            setTimeout(() => {
+                if (document.body.contains(indicator)) {
+                    indicator.remove();
+                }
+            }, 500);
+        }
+    }, 8000);
+    
+    debugLog('[InstitutionalAccess] Visual indicator created and displayed');
 }
 
 /**
