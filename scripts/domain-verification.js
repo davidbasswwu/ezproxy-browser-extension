@@ -164,32 +164,34 @@ class DomainVerifier {
   }
 
   async promptForLogin() {
-    console.log('\n👤 MANUAL LOGIN REQUIRED');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('A browser window is open for you to login.');
+    console.log('\n🚨 AUTHENTICATION PAUSED - WAITING FOR YOU 🚨');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('The script has STOPPED and is waiting for you to login.');
+    console.log('There are NO TIME LIMITS - take as long as you need!');
     console.log('');
-    console.log('📋 Please complete ALL steps at your own pace:');
+    console.log('📋 Complete these steps at your own pace:');
     console.log('');
-    console.log('1. 🔍 Find the browser window (check your taskbar if needed)');
-    console.log('2. 🔑 Enter your Western Washington University credentials');
-    console.log('3. ✅ Complete any required authentication steps (2FA, etc.)');
-    console.log('4. ⏳ Navigate through any additional pages or prompts');
-    console.log('5. 🎯 Wait until you see actual academic content (not login pages)');
-    console.log('6. ⌨️  Return to this terminal and press ENTER when completely done');
+    console.log('1. 🔍 Find the browser window (check your taskbar/dock)');
+    console.log('2. 🔑 Login to Western Washington University');
+    console.log('3. ✅ Complete 2FA or any additional authentication');
+    console.log('4. ⏳ Wait for all redirects and loading to finish');
+    console.log('5. 🎯 Make sure you see actual content (not login forms)');
+    console.log('6. ⌨️  Return here and press ENTER when 100% complete');
     console.log('');
-    console.log('⏰ TAKE AS MUCH TIME AS YOU NEED - NO RUSH WHATSOEVER!');
-    console.log('🕒 This could take 5 minutes, 10 minutes, or however long you need');
-    console.log('💡 The authenticated session will be saved for all future runs');
-    console.log('🔄 After this one-time setup, no login will ever be required again');
+    console.log('⏰ NO RUSH! NO TIMEOUTS! NO PRESSURE!');
+    console.log('🕐 Take 5 minutes, 10 minutes, 30 minutes - whatever you need');
+    console.log('⚡ The script is PAUSED and waiting patiently for you');
+    console.log('💡 This is a one-time setup - future runs will be automatic');
     console.log('');
-    console.log('❓ Need help?');
-    console.log('   • Browser window missing? Check taskbar or restart script');
-    console.log('   • Login not working? Close browser and restart script');  
-    console.log('   • Want to start over? Run: rm ezproxy-session.json');
-    console.log('   • Script stuck? Press Ctrl+C to cancel anytime');
+    console.log('🆘 Troubleshooting:');
+    console.log('   • Can\'t find browser? Look in taskbar/dock for Chrome/Chromium');
+    console.log('   • Login fails? Close browser and restart this script');  
+    console.log('   • Start over? Delete ezproxy-session.json and restart');
+    console.log('   • Need to cancel? Press Ctrl+C anytime');
     console.log('');
-    console.log('🛑 IMPORTANT: Only press ENTER when you can see actual academic content');
-    console.log('   (NOT when you see login pages, loading pages, or redirects)');
+    console.log('🛑 CRITICAL: Only press ENTER when you see actual academic content!');
+    console.log('   ❌ NOT login forms, loading pages, or "redirecting" messages');
+    console.log('   ✅ YES journal articles, databases, or library content');
     console.log('');
 
     // Wait for user input with infinite patience
@@ -287,27 +289,25 @@ class DomainVerifier {
         timeout: CONFIG.session.navigationTimeout 
       });
       
-      // Check if this is a login page and handle authentication
+      // Handle authentication on first domain only
       if (!this.isAuthenticated) {
         console.log('🔍 Checking if authentication is needed...');
-        const isLoginPage = await this.detectLoginPage();
         
-        if (isLoginPage) {
-          console.log('🔑 Authentication required for this domain');
-          await this.promptForLogin();
-          await this.saveCookies();
-          
-          // Navigate again after authentication to get fresh content
-          console.log(`🔄 Refreshing page with authenticated session...`);
-          await this.page.goto(url, { 
-            waitUntil: 'networkidle0', 
-            timeout: CONFIG.session.navigationTimeout 
-          });
-          
-          console.log('✅ Page refreshed with authentication');
-        } else {
-          console.log('✅ No authentication required for this domain');
-        }
+        // Always prompt for login on first run, regardless of page content
+        console.log('🔑 First run detected - manual authentication required');
+        console.log('💡 The browser window is open and ready for you to login');
+        
+        await this.promptForLogin();
+        await this.saveCookies();
+        
+        // After login, reload the current page to get authenticated content
+        console.log(`🔄 Reloading page with your authenticated session...`);
+        await this.page.reload({ 
+          waitUntil: 'networkidle0', 
+          timeout: CONFIG.session.navigationTimeout 
+        });
+        
+        console.log('✅ Page reloaded with authentication - ready for screenshot');
       } else {
         console.log('🔐 Using saved authentication session');
       }
@@ -394,9 +394,15 @@ class DomainVerifier {
   }
 
   async verifyDomain(domain, category) {
-    console.log(`\n🔍 Taking screenshot of EZProxy domain: ${domain} (${category})`);
+    console.log(`\n📸 Processing domain: ${domain} (${category})`);
     
-    // Take screenshot of EZProxy domain (regardless of HTTP response)
+    if (this.isAuthenticated) {
+      console.log(`🔐 Using authenticated session for ${domain}`);
+    } else {
+      console.log(`🌐 Processing ${domain} (authentication will be required)`);
+    }
+    
+    // Take screenshot of EZProxy domain
     await this.takeScreenshot(domain, 'ezproxy');
     
     return { domain, category, screenshotTaken: true };
@@ -440,9 +446,10 @@ class DomainVerifier {
           processedDomains++;
         }
         
-        // Generous pause between domains to avoid overwhelming servers
+        // Generous pause between domains to avoid overwhelming servers  
         if (i < domains.length - 1) {
-          console.log(`⏳ Waiting 2 seconds before next domain...`);
+          console.log(`\n⏳ Moving to next domain in 2 seconds...`);
+          console.log(`📊 Progress: ${processedDomains}/${totalDomains} complete`);
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
