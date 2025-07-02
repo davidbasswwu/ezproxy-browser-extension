@@ -18,7 +18,7 @@ const http = require('http');
 
 // Configuration
 const CONFIG = {
-  timeout: 10000,
+  timeout: 30000, // 30 seconds for general timeouts
   userAgent: 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)',
   maxConcurrent: 1, // Set to 1 to reuse browser session
   screenshotDir: path.join(process.cwd(), 'screenshots'),
@@ -32,7 +32,8 @@ const CONFIG = {
   },
   session: {
     cookiesFile: path.join(process.cwd(), 'ezproxy-session.json'),
-    loginDetectionTimeout: 5000
+    loginDetectionTimeout: 10000, // Wait 10 seconds for page to load before checking for login
+    navigationTimeout: 60000 // 60 seconds for page navigation
   }
 };
 
@@ -111,7 +112,9 @@ class DomainVerifier {
 
   async detectLoginPage() {
     try {
-      // Wait a moment for page to load
+      console.log('🔍 Checking if this is a login page...');
+      
+      // Wait longer for page to fully load
       await this.page.waitForTimeout(CONFIG.session.loginDetectionTimeout);
       
       // Check for common login indicators
@@ -123,6 +126,8 @@ class DomainVerifier {
           hasWWULogin: document.body.innerHTML.toLowerCase().includes('western washington university'),
           hasUniversalLogin: document.body.innerHTML.toLowerCase().includes('universal login'),
           hasShibboleth: document.body.innerHTML.toLowerCase().includes('shibboleth'),
+          hasSignIn: document.body.innerHTML.toLowerCase().includes('sign in'),
+          hasAuthentication: document.body.innerHTML.toLowerCase().includes('authentication'),
           currentUrl: window.location.href,
           pageTitle: document.title
         };
@@ -134,7 +139,8 @@ class DomainVerifier {
                          (loginIndicators.hasPasswordField && loginIndicators.hasUsernameField) ||
                          loginIndicators.hasWWULogin ||
                          loginIndicators.hasUniversalLogin ||
-                         loginIndicators.hasShibboleth;
+                         loginIndicators.hasShibboleth ||
+                         (loginIndicators.hasSignIn && loginIndicators.hasAuthentication);
 
       if (isLoginPage) {
         console.log('\n🔑 LOGIN PAGE DETECTED');
@@ -144,6 +150,10 @@ class DomainVerifier {
         if (loginIndicators.hasWWULogin) console.log('• Western Washington University login detected');
         if (loginIndicators.hasUniversalLogin) console.log('• Universal login system detected');
         if (loginIndicators.hasShibboleth) console.log('• Shibboleth authentication detected');
+        if (loginIndicators.hasLoginForm) console.log('• Login form detected');
+        if (loginIndicators.hasPasswordField) console.log('• Password field detected');
+      } else {
+        console.log('✅ No login required - proceeding with screenshot');
       }
 
       return isLoginPage;
@@ -157,14 +167,23 @@ class DomainVerifier {
     console.log('\n👤 MANUAL LOGIN REQUIRED');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('A browser window has been opened for you to login.');
-    console.log('Please complete the following steps:');
     console.log('');
-    console.log('1. 🌐 Login to Western Washington University in the browser window');
-    console.log('2. ✅ Complete any required authentication steps');
-    console.log('3. ⏱️  Wait until you are successfully authenticated');
-    console.log('4. ⌨️  Press ENTER in this terminal to continue...');
+    console.log('📋 Please complete the following steps:');
     console.log('');
-    console.log('💡 Tip: The authenticated session will be saved and reused for all domains');
+    console.log('1. 🌐 Look at the browser window showing the login page');
+    console.log('2. 🔑 Enter your Western Washington University credentials');
+    console.log('3. ✅ Complete any required authentication steps (2FA, etc.)');
+    console.log('4. ⏳ Wait until you are fully logged in and see the actual content');
+    console.log('5. ⌨️  Return to this terminal and press ENTER to continue');
+    console.log('');
+    console.log('⏰ Take your time - there is no rush!');
+    console.log('💡 The authenticated session will be saved and reused for all domains');
+    console.log('🔄 On subsequent runs, no login will be required');
+    console.log('');
+    console.log('❓ Troubleshooting:');
+    console.log('   • If browser window is hidden, look for it in your taskbar');
+    console.log('   • If login fails, close browser and restart the script');
+    console.log('   • To reset session: rm ezproxy-session.json');
     console.log('');
 
     // Wait for user input
@@ -175,9 +194,11 @@ class DomainVerifier {
     });
 
     return new Promise((resolve) => {
-      rl.question('Press ENTER when you have completed login: ', () => {
+      rl.question('✋ Press ENTER when you have completed login and can see the content: ', () => {
         rl.close();
-        console.log('✅ Continuing with authenticated session...\n');
+        console.log('');
+        console.log('✅ Great! Continuing with authenticated session...');
+        console.log('💾 Saving session for future use...');
         this.isAuthenticated = true;
         resolve();
       });
@@ -236,10 +257,11 @@ class DomainVerifier {
       
       console.log(`📸 Taking screenshot: ${url}`);
       
-      // Navigate to the URL
+      // Navigate to the URL with generous timeout
+      console.log(`🌐 Navigating to: ${url}`);
       await this.page.goto(url, { 
         waitUntil: 'networkidle0', 
-        timeout: CONFIG.timeout 
+        timeout: CONFIG.session.navigationTimeout 
       });
       
       // Check if this is a login page and handle authentication
@@ -251,10 +273,10 @@ class DomainVerifier {
           await this.saveCookies();
           
           // Navigate again after authentication
-          console.log(`🔄 Retrying screenshot with authenticated session: ${url}`);
+          console.log(`🔄 Retrying with authenticated session: ${url}`);
           await this.page.goto(url, { 
             waitUntil: 'networkidle0', 
-            timeout: CONFIG.timeout 
+            timeout: CONFIG.session.navigationTimeout 
           });
         }
       }
@@ -361,7 +383,12 @@ class DomainVerifier {
     });
     console.log(`Total domains: ${totalDomains}`);
     console.log(`Action: Taking screenshots of EZProxy domains`);
-    console.log(`Screenshots will be saved to: ${CONFIG.screenshotDir}\n`);
+    console.log(`Screenshots will be saved to: ${CONFIG.screenshotDir}`);
+    console.log('');
+    console.log('📝 Note: This script will take its time to ensure quality results');
+    console.log('⏰ If authentication is required, you will be prompted to login manually');
+    console.log('🔄 Authenticated sessions are saved for future runs');
+    console.log('');
     
     let processedDomains = 0;
     
@@ -382,9 +409,10 @@ class DomainVerifier {
           processedDomains++;
         }
         
-        // Brief pause between domains
+        // Generous pause between domains to avoid overwhelming servers
         if (i < domains.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log(`⏳ Waiting 2 seconds before next domain...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
     }

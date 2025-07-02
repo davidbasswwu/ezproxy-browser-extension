@@ -85,9 +85,17 @@ node scripts/domain-verification.js
 
 **First Run (Authentication Required):**
 1. Script opens browser window with EZProxy login page
-2. Complete login manually in the browser window
-3. Press ENTER in terminal when authentication is complete
-4. Script captures session and proceeds with all domains
+2. **Take your time** to complete login manually in the browser window
+3. Complete any required 2FA or additional authentication steps
+4. Wait until you can see the actual content (not just login page)
+5. Press ENTER in terminal when authentication is complete
+6. Script captures session and proceeds with all domains
+
+**Generous Timeouts:**
+- 60 seconds for page navigation
+- 10 seconds for login page detection  
+- 2 seconds between each domain
+- No rush - the script is designed to be patient
 
 **Subsequent Runs (Authenticated):**
 1. Script automatically loads saved session
