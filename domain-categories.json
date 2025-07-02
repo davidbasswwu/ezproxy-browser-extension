@@ -18,11 +18,22 @@
         "highwirepress.com",
         "ieeexplore.ieee.org",
         "iopscience.iop.org",
+        "mathscinet.ams.org",
+        "minsocam.org",
+        "msp.org",
         "nature.com",
+        "onlinelibrary.wiley.com",
+        "physiology.org",
         "pnas.org",
-        "rsc.org",
-        "science.org",
+        "publish.aps.org",
+        "pubs.acs.org",
+        "pubs.aip.org",
+        "pubs.rsc.org",
+        "rupress.org",
         "sciencedirect.com",
+        "sciencemag.org",
+        "scifinder.cas.org",
+        "scopus.com",
         "spiedigitallibrary.org",
         "webofscience.com"
       ]
@@ -37,6 +48,10 @@
         "informahealthcare.com",
         "jospt.org",
         "karger.com",
+        "liebertpub.com",
+        "ovidsp.ovid.com",
+        "psychiatryonline.org",
+        "pubmed.ncbi.nlm.nih.gov",
         "thieme-connect.com",
         "www1.aota.org"
       ]
@@ -54,11 +69,25 @@
         "euppublishing.com",
         "fulcrum.org",
         "igi-global.com",
+        "informaworld.com",
         "ingentaconnect.com",
         "jbe-platform.com",
         "journals.sagepub.com",
         "journals.uchicago.edu",
-        "springer.com",
+        "kluweronline.com",
+        "link.springer.com",
+        "liverpooluniversitypress.co.uk",
+        "manchesterhive.com",
+        "meridian.allenpress.com",
+        "mitpressjournals.org",
+        "muse.jhu.edu",
+        "online.sagepub.com",
+        "online.ucpress.edu",
+        "pinnacle-secure.allenpress.com",
+        "portico.org",
+        "press.uillinois.edu",
+        "rotunda.upress.virginia.edu",
+        "scholarlypublishingcollective.org",
         "tandfonline.com",
         "taylorfrancis.com",
         "universitypressscholarship.com",
@@ -71,10 +100,20 @@
       "domains": [
         "dl.acm.org",
         "ebookcentral.proquest.com",
+        "ebsco.com",
         "grantforward.com",
         "incites.thomsonreuters.com",
         "jstor.org",
+        "lexisnexis.com",
+        "link.gale.com",
+        "myendnoteweb.com",
+        "oed.com",
+        "online.salempress.com",
         "proquest.com",
+        "proquest.safaribooksonline.com",
+        "search.alexanderstreet.com",
+        "search.atlaonline.com",
+        "search.ebscohost.com",
         "ulrichsweb.serialssolutions.com",
         "worldcat.org"
       ]
@@ -91,6 +130,9 @@
         "filmplatform.net",
         "fod.infobase.com",
         "gvsu.tugg.com",
+        "library.artstor.org",
+        "media.wce.wwu.edu",
+        "metopera.org",
         "video.alexanderstreet.com",
         "wwu.kanopy.com",
         "wwu.kanopystreaming.com",
@@ -110,6 +152,11 @@
         "ibisworld.com",
         "insights.mrisimmons.com",
         "intelliconnect.cch.com",
+        "mergentintellect.com",
+        "mergentonline.com",
+        "nber.org",
+        "next.srds.com",
+        "research.valueline.com",
         "sloanreview.mit.edu",
         "taxandaccounting.bna.com"
       ]
@@ -128,6 +175,19 @@
         "hapi.ucla.edu",
         "heinonline.org",
         "humanitiesebook.org",
+        "library.cqpress.com",
+        "mla.org",
+        "ncte.org",
+        "oxfordartonline.com",
+        "oxfordbibliographies.com",
+        "oxforddnb.com",
+        "oxfordhandbooks.com",
+        "oxfordlanguagedictionaries.com",
+        "oxfordmusiconline.com",
+        "oxfordreference.com",
+        "oxfordscholarlyeditions.com",
+        "oxfordscholarship.com",
+        "philippinestudies.net",
         "wellesley.chadwyck.co.uk"
       ]
     },
@@ -136,7 +196,15 @@
       "domains": [
         "chronicle.com",
         "exacteditions.com",
-        "infoweb.newsbank.com"
+        "infoweb.newsbank.com",
+        "merip.org",
+        "newleftreview.org"
+      ]
+    },
+    "Education": {
+      "description": "Educational resources, teaching materials, and academic support tools",
+      "domains": [
+        "nctm.org"
       ]
     },
     "Other Resources": {
@@ -167,6 +235,6 @@
       ]
     }
   },
-  "version": "1.0",
-  "lastUpdated": "2025-06-30"
+  "version": "1.1",
+  "lastUpdated": "2025-07-02"
 }
