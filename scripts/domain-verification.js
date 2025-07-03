@@ -22,8 +22,8 @@ const CONFIG = {
   timeout: 20000, // 20 seconds for general timeouts (reduced from 30s)
   userAgent: 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)',
   maxConcurrent: 1, // Set to 1 to reuse browser session
-  screenshotDir: path.join(process.cwd(), 'screenshots'),
-  reportFile: path.join(process.cwd(), 'domain-verification-report.json'),
+  screenshotDir: path.join(process.cwd(), 'test-results'),
+  reportFile: null, // Will be set dynamically with date structure
   screenshot: {
     width: 1280,
     height: 850,
@@ -33,7 +33,7 @@ const CONFIG = {
     dynamicContentWait: 4000  // Wait x seconds for dynamic content to load (authentication banners, images, etc.)
   },
   session: {
-    cookiesFile: path.join(process.cwd(), 'ezproxy-session.json'),
+    cookiesFile: null, // Will be set dynamically with date structure
     loginDetectionTimeout: 8000, // Reduced from 15s to 8s for page load before checking login
     navigationTimeout: 45000 // Reduced from 2 minutes to 45s for page navigation
   }
@@ -47,6 +47,17 @@ class DomainVerifier {
       screenshots: [],
       errors: []
     };
+    
+    // Set up date-based folder structure for test results
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    const month = now.toLocaleString('en-US', { month: 'long' });
+    const day = now.getDate().toString().padStart(2, '0');
+    this.dateFolder = path.join(CONFIG.screenshotDir, year, month, day);
+    
+    // Update CONFIG with dynamic paths
+    CONFIG.reportFile = path.join(this.dateFolder, 'domain-verification-report.json');
+    CONFIG.session.cookiesFile = path.join(this.dateFolder, 'ezproxy-session.json');
     
     // Check for fresh session flag
     if (process.argv.includes('--fresh') || process.argv.includes('--new-session')) {
@@ -72,9 +83,15 @@ class DomainVerifier {
     // Screenshot annotation
     this.annotator = new ScreenshotAnnotator();
     
-    // Ensure screenshots directory exists
-    if (!fs.existsSync(CONFIG.screenshotDir)) {
-      fs.mkdirSync(CONFIG.screenshotDir, { recursive: true });
+    // Ensure date-based directory structure exists
+    if (!fs.existsSync(this.dateFolder)) {
+      fs.mkdirSync(this.dateFolder, { recursive: true });
+    }
+    
+    // Create screenshots subdirectory
+    this.screenshotsFolder = path.join(this.dateFolder, 'screenshots');
+    if (!fs.existsSync(this.screenshotsFolder)) {
+      fs.mkdirSync(this.screenshotsFolder, { recursive: true });
     }
   }
 
@@ -621,22 +638,8 @@ class DomainVerifier {
       const transformedDomain = domain.replace(/\./g, '-');
       const url = `https://${transformedDomain}.${this.config.ezproxyBaseUrl}`;
       
-      // Create date-based folder structure: screenshots/2025/July/03/
-      const now = new Date();
-      const year = now.getFullYear().toString();
-      const month = now.toLocaleString('en-US', { month: 'long' }); // "July"
-      const day = now.getDate().toString().padStart(2, '0'); // "03"
-      
-      const dateFolder = path.join(CONFIG.screenshotDir, year, month, day);
-      
-      // Ensure the date-based directory exists
-      if (!fs.existsSync(dateFolder)) {
-        fs.mkdirSync(dateFolder, { recursive: true });
-        console.log(`📁 Created date folder: ${dateFolder}`);
-      }
-      
       const filename = `screenshot-${domain}-ezproxy-${Date.now()}.png`;
-      const filepath = path.join(dateFolder, filename);
+      const filepath = path.join(this.screenshotsFolder, filename);
       
       console.log(`📸 Taking screenshot: ${url}`);
       
@@ -892,13 +895,7 @@ class DomainVerifier {
     console.log(`Total domains: ${totalDomains}`);
     console.log(`Action: Taking screenshots of EZProxy domains`);
     
-    // Show today's screenshot folder
-    const now = new Date();
-    const year = now.getFullYear().toString();
-    const month = now.toLocaleString('en-US', { month: 'long' });
-    const day = now.getDate().toString().padStart(2, '0');
-    const todaysFolder = path.join(CONFIG.screenshotDir, year, month, day);
-    console.log(`Screenshots will be saved to: ${todaysFolder}`);
+    console.log(`Screenshots will be saved to: ${this.screenshotsFolder}`);
     console.log('');
     console.log('📝 Note: This script will take its time to ensure quality results');
     console.log('⏰ If authentication is required, you will be prompted to login manually');

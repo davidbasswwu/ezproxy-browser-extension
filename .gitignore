@@ -117,10 +117,8 @@ node_modules
 
 CLAUDE.md
 
-screenshots/*
-ezproxy-session.json
-domain-verification-report.json
-domain-screenshot-report.json
+# Test results and verification data (contains sensitive session data)
+test-results/
 
 # Session and authentication files
 *-session.json
