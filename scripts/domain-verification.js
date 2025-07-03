@@ -19,7 +19,7 @@ const ScreenshotAnnotator = require('../utils/screenshot-annotator.js');
 
 // Configuration
 const CONFIG = {
-  timeout: 30000, // 30 seconds for general timeouts
+  timeout: 20000, // 20 seconds for general timeouts (reduced from 30s)
   userAgent: 'Mozilla/5.0 (compatible; EZProxy-Extension-Test/1.0)',
   maxConcurrent: 1, // Set to 1 to reuse browser session
   screenshotDir: path.join(process.cwd(), 'screenshots'),
@@ -29,13 +29,13 @@ const CONFIG = {
     height: 850,
     urlOverlay: true,
     includeTimestamp: true,
-    quality: 90,
-    dynamicContentWait: 1500  // Wait 1.5 seconds for dynamic content to load (authentication banners, etc.)
+    quality: 85, // Reduced from 90 to 80 for faster image processing
+    dynamicContentWait: 4000  // Wait x seconds for dynamic content to load (authentication banners, images, etc.)
   },
   session: {
     cookiesFile: path.join(process.cwd(), 'ezproxy-session.json'),
-    loginDetectionTimeout: 15000, // Wait 15 seconds for page to load before checking for login
-    navigationTimeout: 120000 // 2 minutes for page navigation (generous for slow connections)
+    loginDetectionTimeout: 8000, // Reduced from 15s to 8s for page load before checking login
+    navigationTimeout: 45000 // Reduced from 2 minutes to 45s for page navigation
   }
 };
 
@@ -165,6 +165,16 @@ class DomainVerifier {
         '--disable-infobars', // Remove info bars
         '--disable-default-apps',
         '--no-first-run',
+        '--disable-background-timer-throttling', // Prevent background tab throttling
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=TranslateUI', // Disable translate popup
+        '--disable-ipc-flooding-protection',
+        '--disable-background-networking',
+        '--disable-sync', // Disable Chrome sync
+        '--disable-default-apps',
+        '--disable-extensions-except', // Don't load extensions
+        '--aggressive-cache-discard', // More aggressive memory management
         `--window-size=${CONFIG.screenshot.width},${CONFIG.screenshot.height + 150}` // Extra height for address bar
       ] 
     });
@@ -172,6 +182,26 @@ class DomainVerifier {
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: CONFIG.screenshot.width, height: CONFIG.screenshot.height });
     await this.page.setUserAgent(CONFIG.userAgent);
+
+    // Performance optimizations: Set up request interception for selective resource loading
+    await this.page.setRequestInterception(true);
+    this.enableFullResources = false; // Flag to control resource loading
+    
+    this.page.on('request', (req) => {
+      const resourceType = req.resourceType();
+      
+      // If we're taking a screenshot, load everything for visual quality
+      if (this.enableFullResources) {
+        req.continue();
+      } else {
+        // For initial navigation and login detection, only load essential resources
+        if (['image', 'media'].includes(resourceType)) {
+          req.abort(); // Skip images and media for faster initial loading
+        } else {
+          req.continue(); // Allow HTML, CSS, JS, fonts for proper layout
+        }
+      }
+    });
 
     // Load existing cookies if available
     await this.loadCookies();
@@ -505,8 +535,8 @@ class DomainVerifier {
       const originalImage = sharp(inputPath);
       const { width, height } = await originalImage.metadata();
 
-      // Create single-line header with format: EZproxy: URL    Original: URL    Date
-      const headerHeight = 40;
+      // Create 3-column header layout: EZproxy URL | Original URL | Date
+      const headerHeight = 50;
       
       // Format date as "02 July 2025, 10:43 AM"
       const formattedDate = date.toLocaleString('en-US', { 
@@ -517,6 +547,12 @@ class DomainVerifier {
         minute: '2-digit',
         hour12: true 
       });
+      
+      // Calculate column boundaries for better spacing
+      const col1Width = width * 0.45;  // 45% for EZproxy URL
+      const col2Start = col1Width + 20; // 20px padding
+      const col2Width = width * 0.35;  // 35% for Original URL
+      const col3Start = col2Start + col2Width + 20; // 20px padding
       
       const headerSvg = `
         <svg width="${width}" height="${headerHeight}" xmlns="http://www.w3.org/2000/svg">
@@ -529,9 +565,17 @@ class DomainVerifier {
           <rect width="100%" height="100%" fill="url(#headerGrad)" />
           <rect x="0" y="${headerHeight-2}" width="100%" height="2" fill="#007acc" />
           
-          <!-- Single line layout: EZproxy: URL    Original: URL    Date -->
-          <text x="16" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="white">
-            EZproxy: ${url}${originalUrl ? `        Original: ${originalUrl}` : ''}        ${formattedDate}
+          <!-- Single line with EZproxy and Original URLs -->
+          <text x="16" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="white">
+            <tspan font-weight="600" fill="#99ccff">EZproxy:</tspan>
+            <tspan font-family="monospace" dx="8">${url.length > 45 ? url.substring(0, 42) + '...' : url}</tspan>
+            ${originalUrl ? `<tspan font-weight="600" fill="#99ccff" dx="20">Original:</tspan>
+            <tspan font-family="monospace" dx="8">${originalUrl.length > 35 ? originalUrl.substring(0, 32) + '...' : originalUrl}</tspan>` : ''}
+          </text>
+          
+          <!-- Column 3: Date (right-aligned) -->
+          <text x="${width-16}" y="30" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500" fill="#ffcc99">
+            ${formattedDate}
           </text>
         </svg>
       `;
@@ -596,10 +640,10 @@ class DomainVerifier {
       
       console.log(`📸 Taking screenshot: ${url}`);
       
-      // Navigate to the URL with generous timeout
+      // Navigate to the URL with optimized loading strategy
       console.log(`🌐 Navigating to: ${url}`);
       const response = await this.page.goto(url, { 
-        waitUntil: 'networkidle0', 
+        waitUntil: 'networkidle0', // Wait for all network activity to finish
         timeout: CONFIG.session.navigationTimeout 
       });
       
@@ -691,12 +735,29 @@ class DomainVerifier {
       // Detect institutional access before taking screenshot
       const accessDetection = await this.detectInstitutionalAccess();
       
+      // Enable full resources for high-quality screenshot
+      this.enableFullResources = true;
+      
+      // Reload the page to load all images with full resource access
+      console.log('🔄 Reloading page to load all images...');
+      await this.page.reload({ 
+        waitUntil: 'networkidle0', 
+        timeout: CONFIG.session.navigationTimeout 
+      });
+      
+      // Wait for images to load after reload
+      console.log('⏳ Waiting for all images to load...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       // Take clean screenshot without overlay
       const tempFilepath = filepath.replace('.png', '-temp.png');
       await this.page.screenshot({ 
         path: tempFilepath,
         fullPage: false 
       });
+      
+      // Disable full resources again for next page load
+      this.enableFullResources = false;
       
       console.log(`📸 Clean screenshot captured`);
       
